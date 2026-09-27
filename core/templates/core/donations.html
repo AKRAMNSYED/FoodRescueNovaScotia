@@ -1,0 +1,69 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Donations | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section">
+    <h1>Support Local Food Security</h1>
+    <p>
+        Your donation helps provide meals, emergency food support, and long-term community programs
+        for families across Nova Scotia facing food insecurity.
+    </p>
+
+    <form id="donation-form" style="margin-top: 2rem;">
+        {% csrf_token %}
+        <div style="margin-bottom: 1rem;">
+            <label for="amount" style="display:block; margin-bottom:0.5rem; font-weight:600;">Donation Amount (CAD)</label>
+            <input id="amount" name="amount" type="number" min="1" step="1" value="25" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+
+        <button type="submit" style="background:#0b3d2e; color:white; border:none; padding:0.9rem 1.5rem; border-radius:8px; font-weight:700; cursor:pointer;">
+            Donate Now
+        </button>
+    </form>
+
+    <div id="donation-message" style="margin-top: 1rem; color: #b91c1c; display:none;"></div>
+
+    <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid #e5e7eb;">
+        <h2>Other Ways to Give</h2>
+        <p><strong>Bank transfer:</strong> NS Food Security Fund • Transit #123 • Account #4567890</p>
+        <p><strong>Email:</strong> donations@novascotiafoodsecurity.ca</p>
+    </div>
+</div>
+
+<div class="credits fade-section">
+    Created by Akram Syed
+</div>
+
+<script>
+const form = document.getElementById('donation-form');
+const message = document.getElementById('donation-message');
+
+if (form) {
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const amount = document.getElementById('amount').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        const response = await fetch('{% url "create_checkout_session" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+            },
+            body: 'amount=' + encodeURIComponent(amount)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            message.textContent = data.error || 'Something went wrong while creating the payment session.';
+            message.style.display = 'block';
+            return;
+        }
+
+        window.location.href = data.checkout_url;
+    });
+}
+</script>
+{% endblock %}

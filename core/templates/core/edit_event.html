@@ -1,0 +1,51 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Edit Event | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section">
+    <h1>Edit Event</h1>
+    <form method="post">
+        {% csrf_token %}
+        <div style="margin-bottom: 1rem;">
+            <label for="event-name" style="display:block; margin-bottom:0.5rem; font-weight:600;">Event Name</label>
+            <input id="event-name" name="name" type="text" value="{{ event.name }}" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-date" style="display:block; margin-bottom:0.5rem; font-weight:600;">Date</label>
+            <input id="event-date" name="date" type="date" value="{{ event.date|date:'Y-m-d' }}" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-location" style="display:block; margin-bottom:0.5rem; font-weight:600;">Location</label>
+            <input id="event-location" name="location" type="text" value="{{ event.location }}" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-description" style="display:block; margin-bottom:0.5rem; font-weight:600;">Description</label>
+            <textarea id="event-description" name="description" rows="4" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">{{ event.description }}</textarea>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-seats" style="display:block; margin-bottom:0.5rem; font-weight:600;">Seats Available</label>
+            <input id="event-seats" name="seats" type="number" min="0" value="{{ event.seats }}" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-ticket-price" style="display:block; margin-bottom:0.5rem; font-weight:600;">Ticket Price (CAD)</label>
+            <input id="event-ticket-price" name="ticket_price" type="number" min="0" step="0.01" value="{{ event.ticket_price }}" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-pre-registration" name="pre_registration_open" type="checkbox" {% if event.pre_registration_open %}checked{% endif %}>
+            <label for="event-pre-registration" style="font-weight:600; margin:0;">Pre-registration open</label>
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-registration-optional" name="registration_optional" type="checkbox" {% if event.registration_optional %}checked{% endif %}>
+            <label for="event-registration-optional" style="font-weight:600; margin:0;">Registration optional</label>
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-registration-available" name="registration_available_to_all" type="checkbox" {% if event.registration_available_to_all %}checked{% endif %}>
+            <label for="event-registration-available" style="font-weight:600; margin:0;">Registration available to everyone</label>
+        </div>
+        <button type="submit" style="background:#0b3d2e; color:white; border:none; padding:0.9rem 1.5rem; border-radius:8px; font-weight:700; cursor:pointer;">
+            Save Changes
+        </button>
+    </form>
+</div>
+{% endblock %}

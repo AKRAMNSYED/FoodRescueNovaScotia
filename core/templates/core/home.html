@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Home | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section">
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 2rem; align-items: center;">
+        <div>
+            <h1>Nova Scotia Hunger Insecurity</h1>
+            <p>
+                Food insecurity remains a serious issue across Nova Scotia, affecting households, families,
+                students, and older adults. Access to nutritious food is not only a basic need, but a foundation
+                for health, stability, and opportunity.
+            </p>
+        </div>
+
+        <div>
+            <img src="{% static 'core/images/hunger-insecurity.jpg' %}" alt="Hunger insecurity in Nova Scotia" style="width: 100%; border-radius: 12px; display: block;">
+            <p style="margin-top: 0.75rem; text-align: center; font-size: 0.9rem; color: #475569;">
+                Hunger insecurity impacts families and communities across Nova Scotia every day.
+            </p>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <h3>Food Access</h3>
+            <p>Many families are forced to make difficult choices between food and essentials.</p>
+        </div>
+        <div class="stat">
+            <h3>Community Support</h3>
+            <p>Local programs, food banks, and advocates work to reduce barriers and build resilience.</p>
+        </div>
+        <div class="stat">
+            <h3>Action Needed</h3>
+            <p>Continued awareness, outreach, and support can help communities move toward food security.</p>
+        </div>
+    </div>
+</div>
+
+<div class="card fade-section" style="margin-top: 2rem;">
+    <h2>Rates of Hunger Insecurity in Nova Scotia</h2>
+    <div class="stats-grid">
+        <div class="rate-box">
+            <strong>1 in 7</strong>
+            households experience food insecurity
+        </div>
+        <div class="rate-box">
+            <strong>18%</strong>
+            of families report food access challenges
+        </div>
+        <div class="rate-box">
+            <strong>25%</strong>
+            of children may face food insecurity risk
+        </div>
+    </div>
+</div>
+
+<div class="credits fade-section">
+    Created by Akram Syed
+</div>
+{% endblock %}

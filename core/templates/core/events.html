@@ -1,0 +1,161 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Events | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section">
+    <h1>Events</h1>
+
+    {% for event in events %}
+        <div style="margin-top: 2rem; padding: 1.5rem; border: 1px solid #dbe7e3; border-radius: 12px; background: #f7fbfa; position: relative;">
+            <p style="margin: 0 0 0.5rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: #2f9e7d; font-weight: 700;">
+                Upcoming Event
+            </p>
+            <h2 style="margin: 0 0 0.75rem; color: #0b3d2e;">{{ event.name }}</h2>
+            <p style="margin: 0 0 0.5rem;"><strong>Date:</strong> {{ event.date }}</p>
+            <p style="margin: 0 0 0.5rem;"><strong>Location:</strong> {{ event.location }}</p>
+            {% if event.ticket_price %}
+                <p style="margin: 0 0 0.5rem;"><strong>Ticket Price:</strong> ${{ event.ticket_price }}</p>
+            {% endif %}
+            {% if event.description %}
+                <p style="margin: 0 0 0.5rem; line-height: 1.7;">{{ event.description }}</p>
+            {% endif %}
+            {% if event.pre_registration_open or event.registration_available_to_all %}
+                {% if event.pre_registration_open %}
+                    <p style="margin: 0 0 0.75rem; color: #0b3d2e; font-weight: 700;">Pre-registration is open</p>
+                {% endif %}
+                {% if event.registration_available_to_all %}
+                    <p style="margin: 0 0 0.75rem; color: #365f8b; font-weight: 600;">Registration is available to everyone</p>
+                {% else %}
+                    <p style="margin: 0 0 0.75rem; color: #7c3f00; font-weight: 600;">Registration is limited</p>
+                {% endif %}
+                {% if event.registration_optional %}
+                    <p style="margin: 0 0 0.75rem; color: #365f8b; font-weight: 600;">Registration is optional</p>
+                {% else %}
+                    <p style="margin: 0 0 0.75rem; color: #9a5b00; font-weight: 600;">Registration is required</p>
+                {% endif %}
+            {% endif %}
+            {% if event.seats %}
+                <p style="margin: 0 0 0.75rem;"><strong>Seats left:</strong> {{ event.seats_left }}</p>
+            {% endif %}
+
+            {% if event.pre_registration_open or event.registration_available_to_all %}
+                <h3 style="margin: 1rem 0 0.75rem; color: #0b3d2e;">Register for this event</h3>
+                <p style="margin: 0 0 0.75rem; color: #334155;">Please enter your name, email, and how many spots you would like to reserve.</p>
+                <form method="post" action="{% url 'register_for_event' event.id %}" style="margin-top: 1rem;">
+                    {% csrf_token %}
+                    <div style="display: grid; gap: 0.75rem;">
+                        <input name="name" type="text" placeholder="Your name" style="padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+                        <input name="email" type="email" placeholder="Your email" style="padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+                        <input name="quantity" type="number" min="1" value="1" style="padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+                    </div>
+                    <button type="submit" style="margin-top: 0.75rem; background:#2f9e7d; color:white; border:none; padding:0.8rem 1.2rem; border-radius:8px; font-weight:700; cursor:pointer;">
+                        Pre-register
+                    </button>
+                </form>
+            {% endif %}
+
+            {% if user.is_staff %}
+                <div style="display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
+                    <a href="{% url 'edit_event' event.id %}" style="background:#2f9e7d; color:white; text-decoration:none; padding:0.6rem 1rem; border-radius:8px; font-weight:700; display:inline-block;">
+                        Edit Event
+                    </a>
+                    <form method="post" action="{% url 'delete_event' event.id %}">
+                        {% csrf_token %}
+                        <button type="submit" style="background:#b91c1c; color:white; border:none; padding:0.6rem 1rem; border-radius:8px; font-weight:700; cursor:pointer;">
+                            Delete Event
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    {% empty %}
+        <p style="margin-top: 1.5rem;">No events yet. Add one below.</p>
+    {% endfor %}
+</div>
+
+<div class="card fade-section" style="margin-top: 2rem;">
+    <h2>Add Event</h2>
+    <form method="post" action="{% url 'add_event' %}">
+        {% csrf_token %}
+        <div style="margin-bottom: 1rem;">
+            <label for="event-name" style="display:block; margin-bottom:0.5rem; font-weight:600;">Event Name</label>
+            <input id="event-name" name="name" type="text" placeholder="Event name" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-date" style="display:block; margin-bottom:0.5rem; font-weight:600;">Date</label>
+            <input id="event-date" name="date" type="date" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-location" style="display:block; margin-bottom:0.5rem; font-weight:600;">Location</label>
+            <input id="event-location" name="location" type="text" placeholder="Location" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-description" style="display:block; margin-bottom:0.5rem; font-weight:600;">Description</label>
+            <textarea id="event-description" name="description" rows="4" placeholder="Event description" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;"></textarea>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-seats" style="display:block; margin-bottom:0.5rem; font-weight:600;">Seats Available</label>
+            <input id="event-seats" name="seats" type="number" min="0" value="0" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="event-ticket-price" style="display:block; margin-bottom:0.5rem; font-weight:600;">Ticket Price (CAD)</label>
+            <input id="event-ticket-price" name="ticket_price" type="number" min="0" step="0.01" value="0" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-pre-registration" name="pre_registration_open" type="checkbox">
+            <label for="event-pre-registration" style="font-weight:600; margin:0;">Pre-registration open</label>
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-registration-optional" name="registration_optional" type="checkbox" checked>
+            <label for="event-registration-optional" style="font-weight:600; margin:0;">Registration optional</label>
+        </div>
+        <div style="margin-bottom: 1rem; display:flex; align-items:center; gap:0.75rem;">
+            <input id="event-registration-available" name="registration_available_to_all" type="checkbox" checked>
+            <label for="event-registration-available" style="font-weight:600; margin:0;">Registration available to everyone</label>
+        </div>
+        <button type="submit" style="background:#0b3d2e; color:white; border:none; padding:0.9rem 1.5rem; border-radius:8px; font-weight:700; cursor:pointer;">
+            + Add Event
+        </button>
+    </form>
+</div>
+
+<div class="card fade-section" style="margin-top: 2rem;">
+    <h2>Comments</h2>
+    {% for comment in comments %}
+        <div style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; position: relative;">
+            <strong>{{ comment.name }}</strong>
+            <p style="margin: 0.4rem 0 0;">{{ comment.message }}</p>
+            {% if user.is_staff %}
+                <form method="post" action="{% url 'delete_comment' comment.id %}" style="margin-top: 0.75rem;">
+                    {% csrf_token %}
+                    <button type="submit" style="background:#b91c1c; color:white; border:none; padding:0.5rem 0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">
+                        Delete Comment
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    {% empty %}
+        <p>No comments yet.</p>
+    {% endfor %}
+
+    <form method="post" action="{% url 'add_comment' %}" style="margin-top: 1.5rem;">
+        {% csrf_token %}
+        <div style="margin-bottom: 1rem;">
+            <label for="comment-name" style="display:block; margin-bottom:0.5rem; font-weight:600;">Name</label>
+            <input id="comment-name" name="name" type="text" placeholder="Your name" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="comment-message" style="display:block; margin-bottom:0.5rem; font-weight:600;">Comment</label>
+            <textarea id="comment-message" name="message" rows="3" placeholder="Leave a comment" style="width:100%; padding:0.8rem; border:1px solid #cbd5e1; border-radius:8px;" required></textarea>
+        </div>
+        <button type="submit" style="background:#2f9e7d; color:white; border:none; padding:0.9rem 1.5rem; border-radius:8px; font-weight:700; cursor:pointer;">
+            Post Comment
+        </button>
+    </form>
+</div>
+
+<div class="credits fade-section">
+    Created by Akram Syed
+</div>
+{% endblock %}

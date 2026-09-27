@@ -1,0 +1,21 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Donation Received | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;">
+    <h1>Thank You for Your Donation!</h1>
+    <p>
+        Your generous support will help provide food and essential resources for families and individuals
+        facing hunger insecurity in Nova Scotia.
+    </p>
+    {% if demo_mode %}
+        <p><strong>Demo mode:</strong> This donation flow is running locally without a live Stripe key.</p>
+    {% else %}
+        <p><strong>Payment status:</strong> Your donation was processed successfully.</p>
+    {% endif %}
+    <a href="{% url 'home' %}" style="display:inline-block; margin-top:1rem; background:#2f9e7d; color:white; text-decoration:none; padding:0.9rem 1.5rem; border-radius:8px; font-weight:700;">
+        Back to Home
+    </a>
+</div>
+{% endblock %}
