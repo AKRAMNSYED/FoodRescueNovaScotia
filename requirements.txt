@@ -1,0 +1,4 @@
+Django==6.1.1
+gunicorn>=23,<24
+stripe>=12
+whitenoise>=6,<7
