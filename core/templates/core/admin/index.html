@@ -1,0 +1,13 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+    {% if pending_change_count %}
+        <div class="messagelist">
+            <div class="warning">
+                {{ pending_change_count }} change{{ pending_change_count|pluralize }} awaiting approval.
+                <a href="{% url 'admin:core_changeproposal_changelist' %}">Review proposals</a>
+            </div>
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

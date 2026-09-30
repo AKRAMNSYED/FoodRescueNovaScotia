@@ -163,6 +163,14 @@
         </div>
     </nav>
 
+    {% if messages %}
+        <div class="container" role="status" style="padding-bottom: 0;">
+            {% for message in messages %}
+                <p style="padding:0.8rem 1rem; border-left:4px solid #2f9e7d; background:#eaf7f3;">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <div class="container">
         {% block content %}{% endblock %}
     </div>

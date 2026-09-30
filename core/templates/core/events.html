@@ -5,6 +5,9 @@
 {% block content %}
 <div class="card fade-section">
     <h1>Events</h1>
+    {% if user.is_staff and not user.is_superuser and pending_proposals %}
+        <p role="status">You have {{ pending_proposals }} change{{ pending_proposals|pluralize }} awaiting main admin approval.</p>
+    {% endif %}
 
     {% for event in events %}
         <div style="margin-top: 2rem; padding: 1.5rem; border: 1px solid #dbe7e3; border-radius: 12px; background: #f7fbfa; position: relative;">
@@ -74,8 +77,12 @@
     {% endfor %}
 </div>
 
+{% if user.is_staff %}
 <div class="card fade-section" style="margin-top: 2rem;">
     <h2>Add Event</h2>
+    {% if not user.is_superuser %}
+        <p>New events are submitted to a main admin for approval before publication.</p>
+    {% endif %}
     <form method="post" action="{% url 'add_event' %}">
         {% csrf_token %}
         <div style="margin-bottom: 1rem;">
@@ -119,6 +126,7 @@
         </button>
     </form>
 </div>
+{% endif %}
 
 <div class="card fade-section" style="margin-top: 2rem;">
     <h2>Comments</h2>

@@ -1,9 +1,13 @@
 import stripe
+from decimal import Decimal, InvalidOperation
+from django import forms
 from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
-from .models import Event, EventRegistration, Comment
+from django.views.decorators.http import require_POST
+from .models import ChangeProposal, Event, EventRegistration, Comment
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -15,46 +19,62 @@ def home(request):
 def events(request):
     event_list = Event.objects.all().order_by('-date')
     comment_list = Comment.objects.all().order_by('-created_at')
+    pending_proposals = ChangeProposal.objects.filter(
+        proposed_by=request.user,
+        status=ChangeProposal.Status.PENDING,
+    ).count() if request.user.is_authenticated else 0
     return render(request, 'core/events.html', {
         'events': event_list,
         'comments': comment_list,
+        'pending_proposals': pending_proposals,
     })
 
 
+def _event_payload(request, event=None):
+    name = request.POST.get('name', event.name if event else '').strip()
+    location = request.POST.get('location', event.location if event else '').strip()
+    description = request.POST.get('description', event.description if event else '').strip()
+    try:
+        event_date = forms.DateField().clean(request.POST.get('date', event.date if event else ''))
+        seats = int(request.POST.get('seats', event.seats if event else '0'))
+        ticket_price = Decimal(request.POST.get('ticket_price', event.ticket_price if event else '0'))
+    except (forms.ValidationError, ValueError, InvalidOperation):
+        return None
+
+    if not name or not location or seats < 0 or ticket_price < 0:
+        return None
+
+    return {
+        'name': name,
+            'date': event_date.isoformat(),
+        'location': location,
+        'description': description,
+        'seats': seats,
+        'ticket_price': str(ticket_price),
+        'pre_registration_open': request.POST.get('pre_registration_open') == 'on',
+        'registration_optional': request.POST.get('registration_optional') == 'on',
+        'registration_available_to_all': request.POST.get('registration_available_to_all') == 'on',
+    }
+
+
+@staff_member_required
+@require_POST
 def add_event(request):
-    if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        date = request.POST.get('date', '').strip()
-        location = request.POST.get('location', '').strip()
-        description = request.POST.get('description', '').strip()
-        seats = request.POST.get('seats', '0').strip()
-        ticket_price = request.POST.get('ticket_price', '0').strip()
-        pre_registration_open = request.POST.get('pre_registration_open') == 'on'
-        registration_optional = request.POST.get('registration_optional') == 'on'
-        registration_available_to_all = request.POST.get('registration_available_to_all') == 'on'
+    payload = _event_payload(request)
+    if payload is None:
+        messages.error(request, 'Please enter valid event details.')
+        return redirect('events')
 
-        try:
-            seats = int(seats)
-        except ValueError:
-            seats = 0
-
-        try:
-            ticket_price = float(ticket_price)
-        except ValueError:
-            ticket_price = 0.0
-
-        if name and date and location:
-            Event.objects.create(
-                name=name,
-                date=date,
-                location=location,
-                description=description,
-                seats=seats,
-                ticket_price=ticket_price,
-                pre_registration_open=pre_registration_open,
-                registration_optional=registration_optional,
-                registration_available_to_all=registration_available_to_all,
-            )
+    if request.user.is_superuser:
+        Event.objects.create(**payload)
+        messages.success(request, 'Event published.')
+    else:
+        ChangeProposal.objects.create(
+            action=ChangeProposal.Action.CREATE_EVENT,
+            payload=payload,
+            proposed_by=request.user,
+        )
+        messages.success(request, 'Event submitted for main admin approval.')
     return redirect('events')
 
 
@@ -65,37 +85,45 @@ def edit_event(request, event_id):
         return redirect('events')
 
     if request.method == 'POST':
-        event.name = request.POST.get('name', event.name).strip()
-        event.date = request.POST.get('date', event.date)
-        event.location = request.POST.get('location', event.location).strip()
-        event.description = request.POST.get('description', event.description).strip()
+        payload = _event_payload(request, event)
+        if payload is None:
+            messages.error(request, 'Please enter valid event details.')
+            return redirect('edit_event', event_id=event.id)
 
-        try:
-            event.seats = int(request.POST.get('seats', event.seats))
-        except ValueError:
-            event.seats = 0
-
-        try:
-            event.ticket_price = float(request.POST.get('ticket_price', event.ticket_price))
-        except ValueError:
-            event.ticket_price = 0.0
-
-        event.pre_registration_open = request.POST.get('pre_registration_open') == 'on'
-        event.registration_optional = request.POST.get('registration_optional') == 'on'
-        event.registration_available_to_all = request.POST.get('registration_available_to_all') == 'on'
-
-        if event.name and event.date and event.location:
+        if request.user.is_superuser:
+            for field, value in payload.items():
+                setattr(event, field, value)
             event.save()
+            messages.success(request, 'Event updated.')
+        else:
+            ChangeProposal.objects.create(
+                action=ChangeProposal.Action.UPDATE_EVENT,
+                target_id=event.id,
+                payload=payload,
+                proposed_by=request.user,
+            )
+            messages.success(request, 'Event update submitted for main admin approval.')
         return redirect('events')
 
     return render(request, 'core/edit_event.html', {'event': event})
 
 
 @staff_member_required
+@require_POST
 def delete_event(request, event_id):
     event = Event.objects.filter(id=event_id).first()
     if event:
-        event.delete()
+        if request.user.is_superuser:
+            event.delete()
+            messages.success(request, 'Event deleted.')
+        else:
+            ChangeProposal.objects.create(
+                action=ChangeProposal.Action.DELETE_EVENT,
+                target_id=event.id,
+                payload={'name': event.name},
+                proposed_by=request.user,
+            )
+            messages.success(request, 'Event deletion submitted for main admin approval.')
     return redirect('events')
 
 
@@ -144,10 +172,21 @@ def add_comment(request):
 
 
 @staff_member_required
+@require_POST
 def delete_comment(request, comment_id):
     comment = Comment.objects.filter(id=comment_id).first()
     if comment:
-        comment.delete()
+        if request.user.is_superuser:
+            comment.delete()
+            messages.success(request, 'Comment deleted.')
+        else:
+            ChangeProposal.objects.create(
+                action=ChangeProposal.Action.DELETE_COMMENT,
+                target_id=comment.id,
+                payload={'name': comment.name, 'message': comment.message},
+                proposed_by=request.user,
+            )
+            messages.success(request, 'Comment removal submitted for main admin approval.')
     return redirect('events')
 
 
