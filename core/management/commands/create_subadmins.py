@@ -1,5 +1,3 @@
-from getpass import getpass
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -27,8 +25,8 @@ class Command(BaseCommand):
                 user = user_model(username=username)
 
             while True:
-                password = getpass(f'New password for {username}: ')
-                confirmation = getpass('Confirm password: ')
+                password = input(f'New password for {username} (visible): ')
+                confirmation = input('Confirm password (visible): ')
                 if password != confirmation:
                     self.stderr.write(self.style.ERROR('Passwords do not match. Try again.'))
                     continue

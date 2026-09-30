@@ -125,7 +125,7 @@ class SubadminApprovalTests(TestCase):
 
 class CreateSubadminsCommandTests(TestCase):
 	@patch(
-		'core.management.commands.create_subadmins.getpass',
+		'builtins.input',
 		side_effect=['A-long-random-test-passphrase-73!', 'A-long-random-test-passphrase-73!'],
 	)
 	def test_creates_staff_only_account_and_sets_hashed_password(self, mocked_getpass):
@@ -141,7 +141,7 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertNotIn('A-long-random-test-passphrase-73!', output.getvalue())
 		self.assertEqual(mocked_getpass.call_count, 2)
 
-	@patch('core.management.commands.create_subadmins.getpass', return_value='unused')
+	@patch('builtins.input', return_value='unused')
 	def test_does_not_downgrade_or_reset_existing_superuser(self, mocked_getpass):
 		superuser = get_user_model().objects.create_superuser(
 			username='site-owner',
