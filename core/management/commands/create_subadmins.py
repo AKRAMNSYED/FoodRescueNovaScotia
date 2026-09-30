@@ -5,15 +5,37 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 
+DEFAULT_SUBADMIN_USERNAMES = (
+    'EmeryBoswell',
+    'DanielButler',
+    'CharlieColeman',
+    'GracieCrossley',
+    'JamesHamar',
+    'JonathanLuder',
+    'MorganMaw',
+    'MujeebahOladosu',
+    'JadonPeprah',
+    'JahdaiPeprah',
+    'LydiaPitcher-Jones',
+    'CaseySnair',
+    'CamdenStratchan-Cameron',
+    'EvelynZabarylo',
+    'EllieWoolridge',
+    'EliMosher',
+    'JabirBaldy',
+)
+
+
 class Command(BaseCommand):
     help = 'Create or update staff-only accounts, prompting securely for passwords.'
 
     def add_arguments(self, parser):
-        parser.add_argument('usernames', nargs='+')
+        parser.add_argument('usernames', nargs='*')
 
     def handle(self, *args, **options):
         user_model = get_user_model()
-        for username in dict.fromkeys(options['usernames']):
+        usernames = options['usernames'] or DEFAULT_SUBADMIN_USERNAMES
+        for username in dict.fromkeys(usernames):
             user = user_model.objects.filter(username=username).first()
             if user and user.is_superuser:
                 self.stderr.write(self.style.ERROR(

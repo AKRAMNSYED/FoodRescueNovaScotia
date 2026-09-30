@@ -141,6 +141,18 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertNotIn('A-long-random-test-passphrase-73!', output.getvalue())
 		self.assertEqual(mocked_getpass.call_count, 2)
 
+	@patch('builtins.input', side_effect=['A-long-random-test-passphrase-73!'] * 34)
+	def test_no_arguments_provisions_the_default_username_roster(self, mocked_input):
+		from core.management.commands.create_subadmins import DEFAULT_SUBADMIN_USERNAMES
+
+		output = StringIO()
+		call_command('create_subadmins', stdout=output)
+
+		users = get_user_model().objects.filter(username__in=DEFAULT_SUBADMIN_USERNAMES)
+		self.assertEqual(users.count(), len(DEFAULT_SUBADMIN_USERNAMES))
+		self.assertEqual(users.filter(is_staff=True, is_superuser=False).count(), len(DEFAULT_SUBADMIN_USERNAMES))
+		self.assertEqual(mocked_input.call_count, len(DEFAULT_SUBADMIN_USERNAMES) * 2)
+
 	@patch('builtins.input', return_value='unused')
 	def test_does_not_downgrade_or_reset_existing_superuser(self, mocked_getpass):
 		superuser = get_user_model().objects.create_superuser(
