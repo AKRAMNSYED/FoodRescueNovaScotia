@@ -122,6 +122,24 @@ class SubadminApprovalTests(TestCase):
 		self.assertFalse(Event.objects.filter(name='Unapproved event').exists())
 		self.assertFalse(ChangeProposal.objects.exists())
 
+	def test_staff_chat_page_is_visible_to_staff_and_uses_display_name(self):
+		self.subadmin.username = 'MsMathesonIl'
+		self.subadmin.save(update_fields=['username'])
+		self.client.force_login(self.subadmin)
+
+		response = self.client.get(reverse('chat'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Ms Matheson')
+
+	def test_nonstaff_user_cannot_access_chat_page(self):
+		user = get_user_model().objects.create_user(username='visitor', password='test-password')
+		self.client.force_login(user)
+
+		response = self.client.get(reverse('chat'))
+
+		self.assertNotEqual(response.status_code, 200)
+
 
 class CreateSubadminsCommandTests(TestCase):
 	@patch(
@@ -139,6 +157,18 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertFalse(user.is_superuser)
 		self.assertTrue(user.check_password('A-long-random-test-passphrase-73!'))
 		self.assertNotIn('A-long-random-test-passphrase-73!', output.getvalue())
+		self.assertEqual(mocked_getpass.call_count, 2)
+
+	@patch('builtins.input', side_effect=['EmeryBoswell1!', 'EmeryBoswell1!'])
+	def test_allows_passwords_similar_to_username_for_subadmins(self, mocked_getpass):
+		output = StringIO()
+
+		call_command('create_subadmins', 'EmeryBoswell', stdout=output)
+
+		user = get_user_model().objects.get(username='EmeryBoswell')
+		self.assertTrue(user.is_staff)
+		self.assertFalse(user.is_superuser)
+		self.assertTrue(user.check_password('EmeryBoswell1!'))
 		self.assertEqual(mocked_getpass.call_count, 2)
 
 	@patch('builtins.input', side_effect=['A-long-random-test-passphrase-73!'] * 34)
@@ -168,3 +198,20 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertTrue(superuser.is_superuser)
 		self.assertTrue(superuser.check_password('Original-strong-passphrase-52!'))
 		mocked_getpass.assert_not_called()
+
+	@patch(
+		'builtins.input',
+		side_effect=['MsMathesonIl!201', 'MsMathesonIl!201'],
+	)
+	def test_create_ms_matheson_subadmin_creates_staff_account(self, mocked_getpass):
+		output = StringIO()
+
+		call_command('create_ms_matheson_subadmin', stdout=output)
+
+		user = get_user_model().objects.get(username='MsMathesonIl')
+		self.assertTrue(user.is_staff)
+		self.assertFalse(user.is_superuser)
+		self.assertTrue(user.check_password('MsMathesonIl!201'))
+		self.assertEqual(user.first_name, 'Ms')
+		self.assertEqual(user.last_name, 'Matheson')
+		self.assertEqual(mocked_getpass.call_count, 2)

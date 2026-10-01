@@ -7,13 +7,26 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
-from .models import ChangeProposal, Event, EventRegistration, Comment
+from .models import ChangeProposal, Event, EventRegistration, Comment, StaffChatMessage
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 def home(request):
     return render(request, 'core/home.html')
+
+
+def _display_name_for_user(user):
+    if not user or not getattr(user, 'is_authenticated', False):
+        return 'Guest'
+
+    if user.get_full_name():
+        return user.get_full_name()
+
+    username = user.username.strip()
+    if username.lower() in {'admin', 'msmathesonil'}:
+        return 'Ms Matheson'
+    return username
 
 
 def events(request):
@@ -27,6 +40,22 @@ def events(request):
         'events': event_list,
         'comments': comment_list,
         'pending_proposals': pending_proposals,
+    })
+
+
+@staff_member_required
+def chat(request):
+    chat_messages = StaffChatMessage.objects.select_related('sender').all().order_by('created_at')
+
+    if request.method == 'POST':
+        message = request.POST.get('message', '').strip()
+        if message:
+            StaffChatMessage.objects.create(sender=request.user, message=message)
+        return redirect('chat')
+
+    return render(request, 'core/chat.html', {
+        'chat_messages': chat_messages,
+        'display_name': _display_name_for_user(request.user),
     })
 
 

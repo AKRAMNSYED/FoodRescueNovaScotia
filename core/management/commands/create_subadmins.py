@@ -1,5 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.password_validation import (
+    UserAttributeSimilarityValidator,
+    get_default_password_validators,
+    validate_password,
+)
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -52,8 +56,13 @@ class Command(BaseCommand):
                 if password != confirmation:
                     self.stderr.write(self.style.ERROR('Passwords do not match. Try again.'))
                     continue
+                password_validators = [
+                    validator
+                    for validator in get_default_password_validators()
+                    if not isinstance(validator, UserAttributeSimilarityValidator)
+                ]
                 try:
-                    validate_password(password, user=user)
+                    validate_password(password, user=user, password_validators=password_validators)
                 except ValidationError as error:
                     self.stderr.write(self.style.ERROR(' '.join(error.messages)))
                     continue

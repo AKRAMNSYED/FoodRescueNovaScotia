@@ -158,6 +158,9 @@
         <div class="nav-links">
             <a href="{% url 'home' %}">Home</a>
             <a href="{% url 'events' %}">Events</a>
+            {% if user.is_authenticated and user.is_staff %}
+                <a href="{% url 'chat' %}">Chat</a>
+            {% endif %}
             <a href="{% url 'donations' %}">Donations</a>
             <a href="/admin/">Admin Login</a>
         </div>
