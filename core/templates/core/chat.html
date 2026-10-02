@@ -11,14 +11,14 @@
         {% for message in chat_messages %}
             <div style="margin-bottom: 1rem; padding: 0.85rem 1rem; border-radius: 10px; background: white; border: 1px solid #e2e8f0;">
                 <div style="font-size: 0.8rem; font-weight: 700; color: #0b3d2e; margin-bottom: 0.4rem;">
-                    {% if message.sender.get_full_name %}
-                        {% if message.sender.get_full_name %}
-                            {{ message.sender.get_full_name }}
-                        {% else %}
-                            {% if message.sender.username|lower == 'msmathesonil' or message.sender.username|lower == 'admin' %}Ms Matheson{% else %}{{ message.sender.username }}{% endif %}
-                        {% endif %}
+                    {% if message.sender.is_superuser %}
+                        Akram Syed
+                    {% elif message.sender.get_full_name %}
+                        {{ message.sender.get_full_name }}
+                    {% elif message.sender.username|lower == 'msmathesonil' %}
+                        Ms Matheson
                     {% else %}
-                        {% if message.sender.username|lower == 'msmathesonil' or message.sender.username|lower == 'admin' %}Ms Matheson{% else %}{{ message.sender.username }}{% endif %}
+                        {{ message.sender.username }}
                     {% endif %}
                 </div>
                 <div style="white-space: pre-wrap; line-height: 1.6; color: #1f2933;">{{ message.message }}</div>

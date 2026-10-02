@@ -20,12 +20,15 @@ def _display_name_for_user(user):
     if not user or not getattr(user, 'is_authenticated', False):
         return 'Guest'
 
+    if getattr(user, 'is_superuser', False):
+        return 'Akram Syed'
+
     full_name = user.get_full_name().strip()
     if full_name:
         return full_name
 
     username = user.username.strip()
-    if username.lower() in {'admin', 'msmathesonil'}:
+    if username.lower() == 'msmathesonil':
         return 'Ms Matheson'
     return username
 
