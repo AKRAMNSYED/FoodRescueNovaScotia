@@ -97,10 +97,14 @@ WSGI_APPLICATION = 'hunger_insecurity_app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+# A Railway volume (RAILWAY_VOLUME_MOUNT_PATH) keeps accounts and data across redeploys.
+PERSISTENT_DIR = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH')
+DATA_DIR = Path(PERSISTENT_DIR) if PERSISTENT_DIR else BASE_DIR
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DATA_DIR / 'db.sqlite3',
     }
 }
 
@@ -143,7 +147,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'assets']
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = DATA_DIR / 'media'
 STORAGES = {
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
