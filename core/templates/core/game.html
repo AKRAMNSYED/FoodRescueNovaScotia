@@ -388,7 +388,7 @@
             hudText.textContent = 'Collect ' + FOOD_GOAL + ' cans of food (' + food + '/' + FOOD_GOAL + '), then bring them to Feed Nova Scotia.';
         } else if (questStage === 'deliver') {
             hudTitle.textContent = 'Quest 1: Bring the food to Feed Nova Scotia';
-            hudText.textContent = 'You have ' + food + ' cans. Walk to Feed Nova Scotia and give them away.';
+            hudText.textContent = 'You have ' + food + (food === 1 ? ' can' : ' cans') + '. Walk to Feed Nova Scotia and give them away, one at a time.';
         } else {
             hudTitle.textContent = 'Quest 1 complete! +1 point';
             hudText.textContent = 'Quest 2 is unlocked. It is coming soon!';
@@ -422,8 +422,13 @@
     };
 
     const deliver = () => {
-        floatText('-' + food + ' food', '#b91c1c');
-        food = 0;
+        food -= 1;
+        floatText('-1 can', '#b91c1c');
+        if (food > 0) {
+            say(['Thank you! ' + food + (food === 1 ? ' can' : ' cans') + ' to go.']);
+            updateHud();
+            return;
+        }
         points += 1;
         questStage = 'done';
         floatText('+1 point', '#15803d');
@@ -441,7 +446,7 @@
             return { label: 'Buy food ($' + FOOD_PRICE + ') (E)', enabled: money >= FOOD_PRICE };
         }
         if (questStage === 'deliver' && nearBuilding(buildings.feed) && food > 0) {
-            return { label: 'Give food to Feed NS (E)', enabled: true };
+            return { label: 'Give 1 can to Feed NS (E)', enabled: true };
         }
         return { label: 'Interact (E)', enabled: false };
     };
