@@ -8,7 +8,42 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.add('js');</script>
     <style>
+        .skip-link {
+            position: absolute;
+            left: 0.5rem;
+            top: -4rem;
+            z-index: 2000;
+            background: #ffffff;
+            color: #0b3d2e;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .skip-link:focus {
+            top: 0.5rem;
+        }
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+            outline: 3px solid #f4b400;
+            outline-offset: 2px;
+        }
+        .nav-toggle,
+        .nav-close,
+        .nav-backdrop {
+            display: none;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
         html {
             scroll-behavior: smooth;
         }
@@ -142,10 +177,154 @@
             font-size: 0.95rem;
             color: #475569;
         }
+
+        @media (max-width: 768px) {
+            body.nav-open {
+                overflow: hidden;
+            }
+            nav {
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+                padding: 0.6rem 1rem;
+                justify-content: space-between;
+            }
+            .nav-group {
+                margin-right: 0;
+                gap: 0.5rem;
+            }
+            .brand-logo {
+                min-width: 0;
+            }
+            .brand-logo img {
+                width: 110px;
+            }
+            .flag-badge {
+                transform: none;
+                width: 64px;
+                height: 40px;
+            }
+            .js .nav-toggle,
+            .js .nav-close {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 44px;
+                min-height: 44px;
+                padding: 0;
+                background: transparent;
+                color: white;
+                border: 2px solid rgba(255, 255, 255, 0.7);
+                border-radius: 8px;
+                font-size: 1.5rem;
+                line-height: 1;
+                cursor: pointer;
+            }
+            .nav-close {
+                align-self: flex-end;
+                margin-bottom: 0.75rem;
+            }
+            .nav-links {
+                flex-direction: column;
+                align-items: stretch;
+                flex-wrap: nowrap;
+            }
+            .nav-links a {
+                display: flex;
+                align-items: center;
+                min-height: 44px;
+                box-sizing: border-box;
+                margin: 0 0 0.25rem;
+                padding: 0.75rem 1rem;
+                border-radius: 8px;
+                font-size: 1.05rem;
+            }
+            .nav-links a:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+            .nav-links a[aria-current="page"] {
+                background: rgba(255, 255, 255, 0.2);
+                box-shadow: inset 4px 0 0 #f4b400;
+            }
+            .js .nav-links {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                z-index: 1002;
+                width: min(80vw, 300px);
+                box-sizing: border-box;
+                padding: 1rem;
+                background: #0b3d2e;
+                box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
+                overflow-y: auto;
+                visibility: hidden;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease, visibility 0.25s;
+            }
+            .js .nav-links.open {
+                visibility: visible;
+                transform: translateX(0);
+            }
+            .js .nav-backdrop.open {
+                display: block;
+                position: fixed;
+                inset: 0;
+                z-index: 1001;
+                background: rgba(0, 0, 0, 0.5);
+            }
+            .container {
+                margin: 1rem auto;
+                padding: 0 0.75rem 2rem;
+            }
+            .card {
+                padding: 1.25rem;
+            }
+            h1 {
+                font-size: 1.6rem;
+            }
+            h2 {
+                font-size: 1.3rem;
+            }
+            .hero-grid {
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
+            }
+            input,
+            textarea,
+            select {
+                font-size: 16px;
+            }
+            button {
+                min-height: 44px;
+            }
+            .card,
+            p,
+            h1,
+            h2,
+            h3 {
+                overflow-wrap: anywhere;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+            .fade-section,
+            .js .nav-links {
+                transition: none;
+            }
+            .fade-section {
+                opacity: 1;
+                transform: none;
+            }
+        }
     </style>
 </head>
 <body>
-    <nav>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <nav aria-label="Main">
         <div class="nav-group">
             <div class="brand-logo">
                 <img src="{% static 'download (4).png' %}" alt="Food Rescue NS logo">
@@ -155,15 +334,21 @@
             </div>
         </div>
 
-        <div class="nav-links">
-            <a href="{% url 'home' %}">Home</a>
-            <a href="{% url 'events' %}">Events</a>
+        <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">&#9776;</button>
+
+        {% with current=request.resolver_match.url_name %}
+        <div class="nav-backdrop" id="nav-backdrop"></div>
+        <div class="nav-links" id="nav-links">
+            <button type="button" class="nav-close" id="nav-close" aria-label="Close menu">&times;</button>
+            <a href="{% url 'home' %}"{% if current == 'home' %} aria-current="page"{% endif %}>Home</a>
+            <a href="{% url 'events' %}"{% if current == 'events' or current == 'edit_event' %} aria-current="page"{% endif %}>Events</a>
             {% if user.is_authenticated and user.is_staff %}
-                <a href="{% url 'chat' %}">Chat</a>
+                <a href="{% url 'chat' %}"{% if current == 'chat' %} aria-current="page"{% endif %}>Chat</a>
             {% endif %}
-            <a href="{% url 'donations' %}">Donations</a>
+            <a href="{% url 'donations' %}"{% if current == 'donations' or current == 'donation_success' %} aria-current="page"{% endif %}>Donations</a>
             <a href="/admin/">Admin Login</a>
         </div>
+        {% endwith %}
     </nav>
 
     {% if messages %}
@@ -174,9 +359,48 @@
         </div>
     {% endif %}
 
-    <div class="container">
+    <main class="container" id="main-content" tabindex="-1">
         {% block content %}{% endblock %}
-    </div>
+    </main>
+
+    <script>
+        const navToggle = document.getElementById('nav-toggle');
+        const navClose = document.getElementById('nav-close');
+        const navLinks = document.getElementById('nav-links');
+        const navBackdrop = document.getElementById('nav-backdrop');
+        const mobileQuery = window.matchMedia('(max-width: 768px)');
+
+        const setMenu = (open, restoreFocus) => {
+            navLinks.classList.toggle('open', open);
+            navBackdrop.classList.toggle('open', open);
+            document.body.classList.toggle('nav-open', open);
+            navToggle.setAttribute('aria-expanded', String(open));
+            if (open) {
+                setTimeout(() => navClose.focus(), 50);
+            } else if (restoreFocus) {
+                navToggle.focus();
+            }
+        };
+
+        navToggle.addEventListener('click', () => setMenu(true, false));
+        navClose.addEventListener('click', () => setMenu(false, true));
+        navBackdrop.addEventListener('click', () => setMenu(false, true));
+        navLinks.addEventListener('click', (event) => {
+            if (event.target.closest('a')) {
+                setMenu(false, false);
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && navLinks.classList.contains('open')) {
+                setMenu(false, true);
+            }
+        });
+        mobileQuery.addEventListener('change', (event) => {
+            if (!event.matches) {
+                setMenu(false, false);
+            }
+        });
+    </script>
 
     <script>
         const fadeSections = document.querySelectorAll('.fade-section');
