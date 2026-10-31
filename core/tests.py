@@ -3,6 +3,7 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management.base import CommandError
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -140,6 +141,19 @@ class SubadminApprovalTests(TestCase):
 
 		self.assertNotEqual(response.status_code, 200)
 
+	def test_admin_chat_shows_akram_syed_and_handles_profile_image(self):
+		self.main_admin.first_name = 'Akram'
+		self.main_admin.last_name = 'Syed'
+		self.main_admin.save(update_fields=['first_name', 'last_name'])
+		self.client.force_login(self.main_admin)
+
+		response = self.client.get(reverse('chat'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Akram Syed')
+		self.assertNotContains(response, 'Ms Matheson')
+		self.assertIsNone(response.context['profile_image_url'])
+
 
 class CreateSubadminsCommandTests(TestCase):
 	@patch(
@@ -215,3 +229,80 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertEqual(user.first_name, 'Ms')
 		self.assertEqual(user.last_name, 'Matheson')
 		self.assertEqual(mocked_getpass.call_count, 2)
+
+
+class CreateMainAdminCommandTests(TestCase):
+	@patch(
+		'core.management.commands.create_main_admin.getpass.getpass',
+		side_effect=['Strong-Admin-Passphrase-83!', 'Strong-Admin-Passphrase-83!'],
+	)
+	@patch('builtins.input', return_value='site-owner')
+	def test_creates_superuser_with_prompted_credentials(self, mocked_input, mocked_getpass):
+		output = StringIO()
+
+		call_command('create_main_admin', stdout=output)
+
+		user = get_user_model().objects.get(username='site-owner')
+		self.assertTrue(user.is_active)
+		self.assertTrue(user.is_staff)
+		self.assertTrue(user.is_superuser)
+		self.assertTrue(user.check_password('Strong-Admin-Passphrase-83!'))
+		self.assertNotIn('Strong-Admin-Passphrase-83!', output.getvalue())
+		mocked_input.assert_called_once()
+		self.assertEqual(mocked_getpass.call_count, 2)
+
+	@patch('builtins.input', return_value='site-owner')
+	def test_refuses_to_change_an_existing_account(self, mocked_input):
+		user_model = get_user_model()
+		existing_user = user_model.objects.create_user(
+			username='site-owner',
+			password='Existing-Password-83!',
+		)
+		output = StringIO()
+
+		with self.assertRaises(CommandError):
+			call_command('create_main_admin', stdout=output)
+
+		existing_user.refresh_from_db()
+		self.assertFalse(existing_user.is_superuser)
+		self.assertTrue(existing_user.check_password('Existing-Password-83!'))
+
+
+class CreateSubadminCommandTests(TestCase):
+	@patch(
+		'core.management.commands.create_subadmin.getpass.getpass',
+		side_effect=['Strong-Subadmin-Passphrase-83!', 'Strong-Subadmin-Passphrase-83!'],
+	)
+	@patch('builtins.input', return_value='event-helper')
+	def test_creates_staff_only_account_with_prompted_credentials(
+		self, mocked_input, mocked_getpass
+	):
+		output = StringIO()
+
+		call_command('create_subadmin', stdout=output)
+
+		user = get_user_model().objects.get(username='event-helper')
+		self.assertTrue(user.is_active)
+		self.assertTrue(user.is_staff)
+		self.assertFalse(user.is_superuser)
+		self.assertTrue(user.check_password('Strong-Subadmin-Passphrase-83!'))
+		self.assertNotIn('Strong-Subadmin-Passphrase-83!', output.getvalue())
+		mocked_input.assert_called_once()
+		self.assertEqual(mocked_getpass.call_count, 2)
+
+	@patch('builtins.input', return_value='event-helper')
+	def test_refuses_to_change_an_existing_account(self, mocked_input):
+		user_model = get_user_model()
+		existing_user = user_model.objects.create_user(
+			username='event-helper',
+			password='Existing-Password-83!',
+		)
+		output = StringIO()
+
+		with self.assertRaises(CommandError):
+			call_command('create_subadmin', stdout=output)
+
+		existing_user.refresh_from_db()
+		self.assertFalse(existing_user.is_staff)
+		self.assertFalse(existing_user.is_superuser)
+		self.assertTrue(existing_user.check_password('Existing-Password-83!'))

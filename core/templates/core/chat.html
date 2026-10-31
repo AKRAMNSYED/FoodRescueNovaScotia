@@ -5,7 +5,12 @@
 {% block content %}
 <div class="fade-section card" style="max-width: 900px; margin: 0 auto;">
     <h1>Staff Chat</h1>
-    <p style="margin-top: 0; font-weight: 700; color: #0b3d2e;">Signed in as: {{ display_name }}</p>
+    <div style="display: flex; align-items: center; gap: 0.9rem; margin-top: 0; margin-bottom: 1rem;">
+        {% if profile_image_url %}
+            <img src="{{ profile_image_url }}" alt="{{ display_name }} profile picture" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid #0b3d2e; background: #f1f5f9;">
+        {% endif %}
+        <p style="margin: 0; font-weight: 700; color: #0b3d2e;">Signed in as: {{ display_name }}</p>
+    </div>
 
     <div style="background: #f8fafc; border: 1px solid #dfe7e2; border-radius: 12px; padding: 1rem; margin-top: 1rem; max-height: 420px; overflow-y: auto;">
         {% for message in chat_messages %}

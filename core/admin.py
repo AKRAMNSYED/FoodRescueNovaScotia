@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ObjectDoesNotExist
-from .models import ChangeProposal, Event, EventRegistration, Comment
+from .models import AdminProfile, ChangeProposal, Event, EventRegistration, Comment
 
 admin.site.index_template = 'core/admin/index.html'
 
@@ -50,6 +50,12 @@ class CommentAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+
+
+@admin.register(AdminProfile)
+class AdminProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'profile_image')
+    search_fields = ('user__username', 'user__first_name', 'user__last_name')
 
 
 @admin.register(ChangeProposal)

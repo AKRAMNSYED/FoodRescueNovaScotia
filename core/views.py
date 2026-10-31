@@ -50,6 +50,14 @@ def events(request):
 @staff_member_required
 def chat(request):
     chat_messages = StaffChatMessage.objects.select_related('sender').all().order_by('created_at')
+    profile_image_url = None
+    try:
+        if request.user.is_authenticated and request.user.is_staff:
+            profile = request.user.admin_profile
+            if profile and profile.profile_image:
+                profile_image_url = profile.profile_image.url
+    except Exception:
+        profile_image_url = None
 
     if request.method == 'POST':
         message = request.POST.get('message', '').strip()
@@ -60,6 +68,7 @@ def chat(request):
     return render(request, 'core/chat.html', {
         'chat_messages': chat_messages,
         'display_name': _display_name_for_user(request.user),
+        'profile_image_url': profile_image_url,
     })
 
 

@@ -66,6 +66,14 @@ class StaffChatMessage(models.Model):
         return f'{self.sender}: {self.message[:40]}'
 
 
+class AdminProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='admin_profile')
+    profile_image = models.ImageField(upload_to='admin_profiles/', blank=True, null=True)
+
+    def __str__(self):
+        return f'{self.user} profile'
+
+
 class ChangeProposal(models.Model):
     class Action(models.TextChoices):
         CREATE_EVENT = 'create_event', 'Create event'
