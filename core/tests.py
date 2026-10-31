@@ -236,7 +236,12 @@ class GamePageTests(TestCase):
 		response = self.client.get(reverse('game'))
 
 		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'Coming soon')
+		self.assertContains(response, 'Work in progress')
+		self.assertContains(response, 'Pick your character')
+		self.assertContains(response, 'data-character="eve"')
+		self.assertContains(response, 'data-character="jim"')
+		self.assertContains(response, 'DO YOU KNOW ABOUT HUNGER INSECURITY?')
+		self.assertContains(response, 'Feed Nova Scotia')
 		self.assertContains(response, f'href="{reverse("game")}"')
 
 

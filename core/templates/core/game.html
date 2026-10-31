@@ -1,15 +1,934 @@
 {% extends 'core/base.html' %}
+{% load static %}
 
 {% block title %}Game | Nova Scotia Hunger Insecurity{% endblock %}
 
 {% block content %}
-<div class="card fade-section" style="text-align: center;">
+<style>
+    [hidden] { display: none !important; }
+    .game-pick-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.25rem; margin-top: 1.5rem; }
+    .game-pick {
+        display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+        min-width: 150px; padding: 1rem 1.5rem; cursor: pointer;
+        background: #eaf7f3; color: #0b3d2e; border: 2px solid #2f9e7d; border-radius: 12px;
+        font: inherit; font-size: 1.2rem; font-weight: 700;
+    }
+    .game-pick:hover { background: #d6f0e8; }
+    .game-pick img { height: 150px; width: auto; image-rendering: pixelated; }
+    .game-canvas {
+        display: block; width: 100%; height: auto; border-radius: 12px; background: #4fc3f7;
+        image-rendering: pixelated; border: 2px solid #0b3d2e; box-sizing: border-box;
+    }
+    .game-controls { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+    .game-btn {
+        min-width: 140px; min-height: 52px; padding: 0.6rem 1.2rem; cursor: pointer;
+        background: #0b3d2e; color: #fff; border: none; border-radius: 10px;
+        font: inherit; font-weight: 700; font-size: 1.05rem;
+        touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    }
+    .game-btn.secondary { background: #fff; color: #0b3d2e; border: 2px solid #0b3d2e; touch-action: auto; }
+    .game-btn.active { background: #2f9e7d; }
+    .game-btn:disabled { background: #9db5ad; cursor: not-allowed; }
+    .game-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .game-hud {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem 1rem;
+        margin-bottom: 0.75rem; padding: 0.6rem 0.9rem; background: #eaf7f3; border: 2px solid #2f9e7d; border-radius: 12px;
+        color: #0b3d2e; font-weight: 700;
+    }
+    .game-hud-item { display: flex; align-items: center; gap: 0.4rem; font-size: 1.15rem; }
+    .game-hud-item img { height: 32px; width: auto; image-rendering: pixelated; }
+    .game-quest { flex: 1 1 260px; text-align: left; font-weight: 600; line-height: 1.35; }
+    .game-quest strong { display: block; }
+    .game-hud .game-btn { min-width: 0; min-height: 44px; font-size: 0.95rem; padding: 0.4rem 0.9rem; touch-action: auto; }
+    .scroll-overlay {
+        position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.6); padding: 1rem;
+    }
+    .scroll-dialog {
+        position: relative; width: min(96vw, 880px); aspect-ratio: 715 / 547;
+        background-size: 100% 100%; background-repeat: no-repeat; image-rendering: pixelated;
+    }
+    .scroll-text {
+        position: absolute; inset: 11% 12% 15% 12%; overflow-y: auto; text-align: left;
+        color: #4a2c12; font-size: clamp(0.7rem, 1.7vw, 0.92rem); line-height: 1.35;
+    }
+    .scroll-text h2 { margin: 0 0 0.4rem; font-size: 1.25em; text-align: center; color: #4a2c12; }
+    .scroll-text h3 { margin: 0.7rem 0 0.2rem; font-size: 1.05em; color: #4a2c12; }
+    .scroll-text ol { margin: 0.2rem 0 0.2rem 1.2rem; padding: 0; }
+    .scroll-text li { margin-bottom: 0.3rem; }
+    .scroll-text hr { border: none; border-top: 2px dashed #a8603a; margin: 0.6rem 0; }
+    .scroll-text .scroll-label { text-align: center; font-weight: 700; margin: 0.2rem 0; }
+    .scroll-close { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); min-height: 44px; touch-action: auto; }
+    @media (max-width: 768px) {
+        .scroll-dialog { aspect-ratio: auto; height: min(88vh, 680px); }
+        .scroll-text { inset: 12% 11% 18% 11%; font-size: 0.85rem; }
+    }
+</style>
+
+<div class="card fade-section" style="text-align: center;"
+     id="game-root"
+     data-bg="{% static 'Game/Scrollable_Background.png' %}"
+     data-sun="{% static 'Game/Sun.png' %}"
+     data-cloud="{% static 'Game/Cloud.png' %}"
+     data-eve-stand="{% static 'Game/Eve_Standing.png' %}"
+     data-eve-walk="{% static 'Game/Eve_Walk.png' %}"
+     data-jim-stand="{% static 'Game/Jim_Standing.png' %}"
+     data-jim-walk="{% static 'Game/Jim_Walk.png' %}"
+     data-sobeys="{% static 'Game/Sobeys.png' %}"
+     data-feed="{% static 'Game/Feed_NS.png' %}">
     <h1>Game</h1>
-    <div role="status" style="margin: 1rem 0; padding: 0.9rem 1.1rem; background: #fff9c4; border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; color: #5c4b00; font-weight: 600; text-align: left;">
-        Coming soon. This page is a work in progress.
+    <div style="margin: 1rem 0; padding: 0.9rem 1.1rem; background: #fff9c4; border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; color: #5c4b00; font-weight: 600; text-align: left;">
+        Work in progress. More game features are coming soon.
     </div>
-    <p>We're building a game to help raise awareness about hunger insecurity in Nova Scotia. Check back soon!</p>
+
+    <section id="game-select" aria-labelledby="game-select-title">
+        <h2 id="game-select-title">Pick your character</h2>
+        <div class="game-pick-grid">
+            <button type="button" class="game-pick" data-character="eve">
+                <img src="{% static 'Game/Eve_Standing.png' %}" alt="">
+                <span>Eve</span>
+            </button>
+            <button type="button" class="game-pick" data-character="jim">
+                <img src="{% static 'Game/Jim_Standing.png' %}" alt="">
+                <span>Jim</span>
+            </button>
+        </div>
+    </section>
+
+    <section id="game-stage" hidden aria-label="Game">
+        <p id="game-help" style="margin: 0 0 0.75rem;">
+            Playing as <strong id="game-name"></strong>. Use the <strong>arrow keys</strong> (or W, A, S and D) to walk, <strong>space</strong> to jump, <strong>E</strong> to interact, or use the buttons below.
+        </p>
+        <div class="game-hud">
+            <div class="game-hud-item"><img src="{% static 'Game/Money.png' %}" alt="Money"><span id="hud-money">$15</span></div>
+            <div class="game-hud-item"><img src="{% static 'Game/Food.png' %}" alt="Food"><span id="hud-food">0/3</span></div>
+            <div class="game-hud-item"><span aria-hidden="true">&#9733;</span><span id="hud-points">0 points</span></div>
+            <div class="game-quest">
+                <strong id="hud-quest-title"></strong>
+                <span id="hud-quest-text"></span>
+                <span id="hud-quest-arrow" style="display: block; color: #b45309;"></span>
+            </div>
+            <button type="button" class="game-btn secondary" id="game-scroll-btn">Quest scroll</button>
+        </div>
+        <p id="game-status" class="game-sr-only" aria-live="polite"></p>
+        <canvas id="game-canvas" class="game-canvas" width="960" height="548" tabindex="0"
+                role="img" aria-describedby="game-help"
+                aria-label="A character walking along a road under a blue sky with a sun and drifting clouds"></canvas>
+        <div class="game-controls">
+            <button type="button" class="game-btn" id="game-left" aria-label="Hold to walk left">&#9664; Left</button>
+            <button type="button" class="game-btn" id="game-up" aria-label="Hold to walk up">&#9650; Up</button>
+            <button type="button" class="game-btn" id="game-down" aria-label="Hold to walk down">&#9660; Down</button>
+            <button type="button" class="game-btn" id="game-right" aria-label="Hold to walk right">Right &#9654;</button>
+            <button type="button" class="game-btn" id="game-jump" aria-label="Jump">Jump</button>
+            <button type="button" class="game-btn" id="game-action" disabled>Interact (E)</button>
+            <button type="button" class="game-btn secondary" id="game-change">Change character</button>
+        </div>
+    </section>
+
+    <p id="game-error" role="alert" hidden style="color: #b91c1c; font-weight: 700;">The game could not load its images. Please refresh the page.</p>
 </div>
+
+{# Outside the card so the card's fade animation can't clip the fixed overlay. #}
+<div class="scroll-overlay" id="scroll-overlay" hidden>
+        <div class="scroll-dialog" role="dialog" aria-modal="true" aria-labelledby="scroll-title"
+             style="background-image: url('{% static 'Game/Scroll.png' %}');">
+            <div class="scroll-text" id="scroll-text" tabindex="0">
+                <h2 id="scroll-title">DO YOU KNOW ABOUT HUNGER INSECURITY?</h2>
+                <p class="scroll-label">HERE ARE SOME FACTS:</p>
+                <ol>
+                    <li>26.2% of people in Nova Scotia have food insecurity!</li>
+                    <li>34.8% of children in the province live in food-insecure households, reflecting high rates of youth and family economic vulnerability.</li>
+                    <li>The main source of food insecurity in Nova Scotia is inadequate income, driven by low wages, high living costs, and social assistance rates that fall below the poverty line!</li>
+                    <li>Single-parent families face the highest burden, with over 52% to 57% experiencing food insecurity.</li>
+                    <li>Some people are making &ldquo;billions of dollars off of food insecurity&rdquo; and overpriced food!</li>
+                </ol>
+                <hr>
+                <h3>TO HELP, YOU CAN DO THESE QUESTS:</h3>
+                <p><strong>1. Go to a store, buy food &gt;&gt;&gt; Follow the arrow</strong></p>
+                <p class="scroll-label">&mdash; Description &mdash;</p>
+                <p>Collect 3 cans of food, then bring them to this location: <strong>Feed Nova Scotia</strong></p>
+                <p class="scroll-label">&mdash; Do this to unlock the next quest &mdash;</p>
+            </div>
+            <button type="button" class="game-btn scroll-close" id="scroll-close">Start quest</button>
+        </div>
+    </div>
+
+<script>
+(() => {
+    const root = document.getElementById('game-root');
+    const selectPanel = document.getElementById('game-select');
+    const stage = document.getElementById('game-stage');
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const errorBox = document.getElementById('game-error');
+    const leftBtn = document.getElementById('game-left');
+    const rightBtn = document.getElementById('game-right');
+    const upBtn = document.getElementById('game-up');
+    const downBtn = document.getElementById('game-down');
+    const jumpBtn = document.getElementById('game-jump');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const BG_W = 714;
+    // The road surface spans about y 408-477; feet stay between these limits.
+    const ROAD_TOP = 436; // fallbacks if the road can't be measured
+    const ROAD_BOTTOM = 472;
+    const ROAD_TOP_MARGIN = 38; // feet stay below the black top outline
+    const ROAD_BOTTOM_MARGIN = 20; // and above the grass
+    const FEET_HALF_WIDTH = 14;
+    const V_SPEED = 90;
+    const JUMP_SPEED = 560;
+    const GRAVITY = 1800;
+    const CHAR_SCALE = 0.55;
+    const SPEED = 240;
+    const FRAME_SECONDS = 0.18;
+    const CLOUD_PARALLAX = 0.25;
+    const SUN_X = W - 160;
+    const SUN_Y = 34;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const load = (src) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load ' + src));
+        img.src = src;
+    });
+
+    const assetsPromise = Promise.all([
+        load(root.dataset.bg), load(root.dataset.sun), load(root.dataset.cloud),
+        load(root.dataset.eveStand), load(root.dataset.eveWalk),
+        load(root.dataset.jimStand), load(root.dataset.jimWalk),
+        load(root.dataset.sobeys), load(root.dataset.feed),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed]) => ({
+        bg, sun, cloud, road: buildRoadMap(bg),
+        sobeys, feed,
+        characters: {
+            eve: { name: 'Eve', stand: eveStand, walk: eveWalk },
+            jim: { name: 'Jim', stand: jimStand, walk: jimWalk },
+        },
+    }));
+    assetsPromise.catch(() => { errorBox.hidden = false; });
+
+    let assets = null;
+    let character = null;
+    let running = false;
+    let rafId = 0;
+    let lastTime = 0;
+    let scrollX = 0;
+    let facing = 1;
+    let walkTime = 0;
+    let feetY = (ROAD_TOP + ROAD_BOTTOM) / 2;
+    let jumpH = 0;
+    let jumpV = 0;
+    let clouds = [];
+    const held = { left: false, right: false, up: false, down: false };
+    const keys = new Set();
+
+    // Quest 1 state. One "step" is STEP pixels of walking.
+    const STEP = 10;
+    const START_MONEY = 15;
+    const FOOD_PRICE = 5;
+    const FOOD_GOAL = 3;
+    const BUILDING_BASE = 412;
+    const SOBEYS_STEPS = 500;
+    const FEED_STEPS = 300; // Feed Nova Scotia is behind you at the start.
+    let money = START_MONEY;
+    let food = 0;
+    let points = 0;
+    let questStage = 'shop'; // 'shop' -> 'deliver' -> 'done'
+    let sobeysIntroDone = false;
+    let scrollOpen = false;
+    let bubble = null;
+    let bubbleQueue = [];
+    let floaters = [];
+    let banner = null;
+    let chevronTime = 0;
+    let lastActionLabel = '';
+    let lastArrowText = '';
+    const buildings = {};
+
+    const hudMoney = document.getElementById('hud-money');
+    const hudFood = document.getElementById('hud-food');
+    const hudPoints = document.getElementById('hud-points');
+    const hudTitle = document.getElementById('hud-quest-title');
+    const hudText = document.getElementById('hud-quest-text');
+    const hudArrow = document.getElementById('hud-quest-arrow');
+    const statusBox = document.getElementById('game-status');
+    const actionBtn = document.getElementById('game-action');
+    const scrollOverlay = document.getElementById('scroll-overlay');
+    const scrollClose = document.getElementById('scroll-close');
+    const scrollBtn = document.getElementById('game-scroll-btn');
+    const scrollText = document.getElementById('scroll-text');
+
+    const spawnCloud = (drawX) => {
+        clouds.push({
+            x: drawX + scrollX * CLOUD_PARALLAX,
+            y: 10 + Math.random() * 100,
+            scale: 0.55 + Math.random() * 0.6,
+            speed: reduceMotion ? 0 : 12 + Math.random() * 26,
+        });
+    };
+
+    const resetWorld = () => {
+        scrollX = 0;
+        facing = 1;
+        walkTime = 0;
+        feetY = (ROAD_TOP + ROAD_BOTTOM) / 2;
+        jumpH = 0;
+        jumpV = 0;
+        money = START_MONEY;
+        food = 0;
+        points = 0;
+        questStage = 'shop';
+        sobeysIntroDone = false;
+        bubble = null;
+        bubbleQueue = [];
+        floaters = [];
+        banner = null;
+        buildings.sobeys = { name: 'Sobeys', img: assets.sobeys, scale: 0.85, x: W / 2 + SOBEYS_STEPS * STEP };
+        buildings.feed = { name: 'Feed Nova Scotia', img: assets.feed, scale: 0.75, x: W / 2 - FEED_STEPS * STEP };
+        updateHud();
+        clouds = [];
+        for (let i = 0; i < 5; i++) {
+            spawnCloud((W / 5) * i + Math.random() * 120);
+        }
+    };
+
+    const direction = () => {
+        const left = held.left || keys.has('left');
+        const right = held.right || keys.has('right');
+        return (right ? 1 : 0) - (left ? 1 : 0);
+    };
+
+    const verticalDirection = () => {
+        const up = held.up || keys.has('up');
+        const down = held.down || keys.has('down');
+        return (down ? 1 : 0) - (up ? 1 : 0);
+    };
+
+    // The road edges are wavy, so measure them from the background image itself.
+    // For each background column, find where the road starts and where the grass begins.
+    const buildRoadMap = (bg) => {
+        const off = document.createElement('canvas');
+        off.width = bg.width;
+        off.height = bg.height;
+        const octx = off.getContext('2d', { willReadFrequently: true });
+        octx.drawImage(bg, 0, 0);
+        const data = octx.getImageData(0, 0, bg.width, bg.height).data;
+        const tops = new Array(bg.width).fill(ROAD_TOP);
+        const bottoms = new Array(bg.width).fill(ROAD_BOTTOM);
+        for (let x = 0; x < bg.width; x++) {
+            let top = -1;
+            let bottom = -1;
+            for (let y = 250; y < bg.height; y++) {
+                const i = (y * bg.width + x) * 4;
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                const sky = b > 200 && r < 140;
+                const grass = g > r + 30 && g > b + 30;
+                if (top < 0 && !sky && !grass) {
+                    top = y;
+                } else if (top >= 0 && grass) {
+                    bottom = y;
+                    break;
+                }
+            }
+            if (top >= 0 && bottom > top) {
+                tops[x] = top + ROAD_TOP_MARGIN;
+                bottoms[x] = bottom - ROAD_BOTTOM_MARGIN;
+            }
+        }
+        return { tops, bottoms };
+    };
+
+    const columnAt = (worldX) => {
+        const tile = Math.floor(worldX / BG_W);
+        let local = Math.floor(worldX - tile * BG_W);
+        if (Math.abs(tile) % 2 === 1) {
+            local = BG_W - 1 - local;
+        }
+        return Math.min(BG_W - 1, Math.max(0, local));
+    };
+
+    // Allowed feet range for the character's current position: the tightest road
+    // limits across the width of its feet.
+    const roadLimits = () => {
+        let minY = -Infinity;
+        let maxY = Infinity;
+        for (let dx = -FEET_HALF_WIDTH; dx <= FEET_HALF_WIDTH; dx += 4) {
+            const col = columnAt(scrollX + W / 2 + dx);
+            minY = Math.max(minY, assets.road.tops[col]);
+            maxY = Math.min(maxY, assets.road.bottoms[col]);
+        }
+        return maxY < minY ? [minY, minY] : [minY, maxY];
+    };
+
+    const jump = () => {
+        if (running && jumpH === 0 && jumpV === 0) {
+            jumpV = JUMP_SPEED;
+        }
+    };
+
+    const playerX = () => scrollX + W / 2;
+
+    const nearBuilding = (b) => Math.abs(playerX() - b.x) < b.img.width * b.scale * 0.4;
+
+    const currentTarget = () => {
+        if (questStage === 'shop') {
+            return buildings.sobeys;
+        }
+        return questStage === 'deliver' ? buildings.feed : null;
+    };
+
+    const updateHud = () => {
+        hudMoney.textContent = '$' + money;
+        hudFood.textContent = food + '/' + FOOD_GOAL;
+        hudPoints.textContent = points + (points === 1 ? ' point' : ' points');
+        if (questStage === 'shop') {
+            hudTitle.textContent = 'Quest 1: Go to a store and buy food';
+            hudText.textContent = 'Collect ' + FOOD_GOAL + ' cans of food (' + food + '/' + FOOD_GOAL + '), then bring them to Feed Nova Scotia.';
+        } else if (questStage === 'deliver') {
+            hudTitle.textContent = 'Quest 1: Bring the food to Feed Nova Scotia';
+            hudText.textContent = 'You have ' + food + ' cans. Walk to Feed Nova Scotia and give them away.';
+        } else {
+            hudTitle.textContent = 'Quest 1 complete! +1 point';
+            hudText.textContent = 'Quest 2 is unlocked. It is coming soon!';
+        }
+    };
+
+    const say = (lines) => {
+        bubbleQueue.push(...lines);
+    };
+
+    const floatText = (text, color) => {
+        floaters.push({ text, color, age: 0 });
+    };
+
+    const buy = () => {
+        money -= FOOD_PRICE;
+        food += 1;
+        floatText('-$' + FOOD_PRICE, '#b91c1c');
+        floatText('+1 food', '#15803d');
+        const lines = [
+            ['$' + FOOD_PRICE + ' for ONE can?! Why is food so expensive?'],
+            ['Prices keep going up, but wages and benefits are not...'],
+            ['That was all my money! Time to feed Nova Scotia.'],
+        ];
+        say(lines[food - 1]);
+        if (food >= FOOD_GOAL) {
+            questStage = 'deliver';
+            statusBox.textContent = 'You have 3 cans of food. Follow the arrow to Feed Nova Scotia.';
+        }
+        updateHud();
+    };
+
+    const deliver = () => {
+        floatText('-' + food + ' food', '#b91c1c');
+        food = 0;
+        points += 1;
+        questStage = 'done';
+        floatText('+1 point', '#15803d');
+        banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked - coming soon'], age: 0 };
+        say(['Thank you! Every can helps a neighbour in need.']);
+        statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked and coming soon.';
+        updateHud();
+    };
+
+    const actionState = () => {
+        if (scrollOpen) {
+            return { label: 'Interact (E)', enabled: false };
+        }
+        if (questStage === 'shop' && nearBuilding(buildings.sobeys) && food < FOOD_GOAL) {
+            return { label: 'Buy food ($' + FOOD_PRICE + ') (E)', enabled: money >= FOOD_PRICE };
+        }
+        if (questStage === 'deliver' && nearBuilding(buildings.feed) && food > 0) {
+            return { label: 'Give food to Feed NS (E)', enabled: true };
+        }
+        return { label: 'Interact (E)', enabled: false };
+    };
+
+    const doAction = () => {
+        if (!running || !actionState().enabled) {
+            return;
+        }
+        if (questStage === 'shop') {
+            buy();
+        } else if (questStage === 'deliver') {
+            deliver();
+        }
+    };
+
+    const arrowText = () => {
+        const target = currentTarget();
+        if (!target) {
+            return '';
+        }
+        if (nearBuilding(target)) {
+            return "You're at " + target.name + '!';
+        }
+        const dx = target.x - playerX();
+        const steps = Math.round(Math.abs(dx) / STEP);
+        return (dx > 0 ? '\u25B6\u25B6\u25B6 ' : '\u25C0\u25C0\u25C0 ') + 'Follow the arrow: ' + target.name + ', ' + steps + ' steps';
+    };
+
+    const updateQuest = (dt) => {
+        if (questStage === 'shop' && !sobeysIntroDone && nearBuilding(buildings.sobeys)) {
+            sobeysIntroDone = true;
+            say(['Why is food so expensive?!', 'I only have $' + money + ' to get food and feed Nova Scotia...']);
+        }
+        if (bubble) {
+            bubble.age += dt;
+            if (bubble.age >= bubble.life) {
+                bubble = null;
+            }
+        }
+        if (!bubble && bubbleQueue.length) {
+            const text = bubbleQueue.shift();
+            bubble = { text, age: 0, life: 2.4 + text.length * 0.04 };
+            statusBox.textContent = text;
+        }
+        floaters.forEach((f) => { f.age += dt; });
+        floaters = floaters.filter((f) => f.age < 1.4);
+        if (banner) {
+            banner.age += dt;
+            if (banner.age > 5) {
+                banner = null;
+            }
+        }
+        chevronTime += dt;
+
+        const action = actionState();
+        const label = action.label + (action.enabled ? '' : '|off');
+        if (label !== lastActionLabel) {
+            lastActionLabel = label;
+            actionBtn.textContent = action.label;
+            actionBtn.disabled = !action.enabled;
+        }
+        const arrow = arrowText();
+        if (arrow !== lastArrowText) {
+            lastArrowText = arrow;
+            hudArrow.textContent = arrow;
+        }
+    };
+
+    const openScroll = () => {
+        scrollOpen = true;
+        Object.keys(held).forEach((side) => { held[side] = false; });
+        keys.clear();
+        scrollOverlay.hidden = false;
+        scrollText.scrollTop = 0;
+        scrollClose.focus();
+    };
+
+    const closeScroll = () => {
+        scrollOpen = false;
+        scrollOverlay.hidden = true;
+        lastTime = performance.now();
+        canvas.focus({ preventScroll: true });
+    };
+
+    const update = (dt) => {
+        updateQuest(dt);
+        if (jumpV !== 0 || jumpH > 0) {
+            jumpV -= GRAVITY * dt;
+            jumpH += jumpV * dt;
+            if (jumpH <= 0) {
+                jumpH = 0;
+                jumpV = 0;
+            }
+        }
+        const dir = direction();
+        const vdir = verticalDirection();
+        if (dir !== 0) {
+            facing = dir;
+            scrollX += dir * SPEED * dt;
+        }
+        if (vdir !== 0) {
+            feetY += vdir * V_SPEED * dt;
+        }
+        const [minY, maxY] = roadLimits();
+        feetY = Math.min(maxY, Math.max(minY, feetY));
+        if (dir !== 0 || vdir !== 0) {
+            walkTime += dt;
+        } else {
+            walkTime = 0;
+        }
+
+        for (const cloud of clouds) {
+            cloud.x -= cloud.speed * dt;
+        }
+        const cw = assets.cloud.width;
+        clouds = clouds.filter((cloud) => {
+            const drawX = cloud.x - scrollX * CLOUD_PARALLAX;
+            return drawX > -cw * 1.2 - 20 && drawX < W + cw * 1.2 + 400;
+        });
+        while (clouds.length < 5) {
+            const fromLeft = facing < 0 && dir !== 0;
+            spawnCloud(fromLeft ? -cw * 1.2 - 10 : W + 10);
+        }
+    };
+
+    const drawBackground = () => {
+        const first = Math.floor(scrollX / BG_W);
+        for (let i = first; i * BG_W - scrollX < W; i++) {
+            const x = Math.round(i * BG_W - scrollX);
+            if (Math.abs(i) % 2 === 0) {
+                ctx.drawImage(assets.bg, x, 0);
+            } else {
+                // Mirror every other tile so the edges always line up.
+                ctx.save();
+                ctx.translate(x + BG_W, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(assets.bg, 0, 0);
+                ctx.restore();
+            }
+        }
+    };
+
+    const drawCharacter = () => {
+        const walking = direction() !== 0 || verticalDirection() !== 0 || jumpH > 0;
+        const showWalk = walking && Math.floor(walkTime / FRAME_SECONDS) % 2 === 0;
+        const img = showWalk ? character.walk : character.stand;
+        const w = img.width * CHAR_SCALE;
+        const h = img.height * CHAR_SCALE;
+        if (jumpH > 0) {
+            // Soft shadow stays on the road while the character is in the air.
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.beginPath();
+            ctx.ellipse(W / 2, feetY, w / 2.2, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.save();
+        ctx.translate(W / 2, feetY - jumpH - h);
+        if (facing < 0) {
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(img, -w / 2, 0, w, h);
+        ctx.restore();
+    };
+
+    const roundedRect = (x, y, w, h, r) => {
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(x, y, w, h, r);
+        } else {
+            ctx.rect(x, y, w, h);
+        }
+    };
+
+    const wrapText = (text, maxWidth) => {
+        const lines = [];
+        let line = '';
+        text.split(' ').forEach((word) => {
+            const test = line ? line + ' ' + word : word;
+            if (line && ctx.measureText(test).width > maxWidth) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = test;
+            }
+        });
+        if (line) {
+            lines.push(line);
+        }
+        return lines;
+    };
+
+    const drawBuildings = () => {
+        Object.values(buildings).forEach((b) => {
+            const w = b.img.width * b.scale;
+            const h = b.img.height * b.scale;
+            const x = b.x - scrollX - w / 2;
+            if (x > W || x + w < 0) {
+                return;
+            }
+            ctx.drawImage(b.img, Math.round(x), Math.round(BUILDING_BASE - h), Math.round(w), Math.round(h));
+        });
+        const target = currentTarget();
+        if (target && !nearBuilding(target)) {
+            const w = target.img.width * target.scale;
+            const h = target.img.height * target.scale;
+            const sx = target.x - scrollX;
+            if (sx > -w / 2 && sx < W + w / 2) {
+                const bob = reduceMotion ? 0 : Math.sin(chevronTime * 5) * 6;
+                const ty = BUILDING_BASE - h - 34 + bob;
+                ctx.fillStyle = '#facc15';
+                ctx.strokeStyle = '#0b3d2e';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(sx - 18, ty);
+                ctx.lineTo(sx + 18, ty);
+                ctx.lineTo(sx, ty + 28);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+    };
+
+    // Edge pill that points toward an off-screen target.
+    const drawTargetIndicator = () => {
+        const target = currentTarget();
+        if (!target) {
+            return;
+        }
+        const w = target.img.width * target.scale;
+        const sx = target.x - scrollX;
+        if (sx > -w / 2 && sx < W + w / 2) {
+            return;
+        }
+        const toRight = sx > W / 2;
+        const steps = Math.round(Math.abs(target.x - playerX()) / STEP);
+        const count = reduceMotion ? 3 : 1 + (Math.floor(chevronTime * 3) % 3);
+        const chevrons = (toRight ? '\u25B6' : '\u25C0').repeat(count);
+        const text = toRight
+            ? target.name.toUpperCase() + '  ' + steps + ' steps  ' + chevrons
+            : chevrons + '  ' + target.name.toUpperCase() + '  ' + steps + ' steps';
+        ctx.font = 'bold 22px sans-serif';
+        const tw = ctx.measureText(text).width + 28;
+        const x = toRight ? W - tw - 10 : 10;
+        const y = 215;
+        ctx.fillStyle = 'rgba(11, 61, 46, 0.88)';
+        roundedRect(x, y, tw, 40, 12);
+        ctx.fill();
+        ctx.fillStyle = '#fde047';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(text, x + 14, y + 21);
+    };
+
+    const drawBubble = () => {
+        if (!bubble) {
+            return;
+        }
+        ctx.font = 'bold 20px sans-serif';
+        const lines = wrapText(bubble.text, 270);
+        const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+        const bw = textW + 36;
+        const bh = lines.length * 26 + 22;
+        const headY = feetY - jumpH - character.stand.height * CHAR_SCALE;
+        const bx = Math.min(W - bw - 8, Math.max(8, W / 2 - bw / 2));
+        const by = Math.max(8, headY - 40 - bh);
+        const tailY = by + bh;
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#0b3d2e';
+        ctx.lineWidth = 3;
+        roundedRect(bx, by, bw, bh, 22);
+        ctx.fill();
+        ctx.stroke();
+        [[W / 2 + 6, tailY + 12, 8], [W / 2 + 2, tailY + 28, 5]].forEach(([cx, cy, r]) => {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        });
+        ctx.fillStyle = '#0b3d2e';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        lines.forEach((line, i) => ctx.fillText(line, bx + bw / 2, by + 11 + 13 + i * 26));
+    };
+
+    const drawFloaters = () => {
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        floaters.forEach((f, i) => {
+            const y = feetY - 150 - f.age * 40 - i * 28;
+            ctx.globalAlpha = Math.max(0, 1 - f.age / 1.4);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(f.text, W / 2 + 62, y + 2);
+            ctx.fillStyle = f.color;
+            ctx.fillText(f.text, W / 2 + 60, y);
+        });
+        ctx.globalAlpha = 1;
+    };
+
+    const drawBanner = () => {
+        if (!banner) {
+            return;
+        }
+        ctx.fillStyle = 'rgba(11, 61, 46, 0.92)';
+        roundedRect(W / 2 - 250, 190, 500, 90, 16);
+        ctx.fill();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(banner.lines[0], W / 2, 224);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(banner.lines[1], W / 2, 258);
+    };
+
+    const draw = () => {
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, W, H);
+        drawBackground();
+        ctx.drawImage(assets.sun, SUN_X, SUN_Y);
+        for (const cloud of clouds) {
+            const x = cloud.x - scrollX * CLOUD_PARALLAX;
+            ctx.drawImage(assets.cloud, Math.round(x), Math.round(cloud.y),
+                Math.round(assets.cloud.width * cloud.scale), Math.round(assets.cloud.height * cloud.scale));
+        }
+        drawBuildings();
+        drawCharacter();
+        drawFloaters();
+        drawBubble();
+        drawTargetIndicator();
+        drawBanner();
+    };
+
+    const frame = (time) => {
+        if (!running) {
+            return;
+        }
+        const dt = Math.min((time - lastTime) / 1000, 0.05);
+        lastTime = time;
+        if (!scrollOpen) {
+            update(dt);
+        }
+        draw();
+        rafId = requestAnimationFrame(frame);
+    };
+
+    const start = () => {
+        running = true;
+        lastTime = performance.now();
+        rafId = requestAnimationFrame(frame);
+    };
+
+    const stop = () => {
+        running = false;
+        cancelAnimationFrame(rafId);
+        Object.keys(held).forEach((side) => { held[side] = false; });
+        keys.clear();
+        scrollOpen = false;
+        scrollOverlay.hidden = true;
+        lastActionLabel = '';
+        [leftBtn, rightBtn, upBtn, downBtn].forEach((button) => button.classList.remove('active'));
+    };
+
+    document.querySelectorAll('.game-pick').forEach((button) => {
+        button.addEventListener('click', async () => {
+            try {
+                assets = await assetsPromise;
+            } catch (error) {
+                return;
+            }
+            character = assets.characters[button.dataset.character];
+            document.getElementById('game-name').textContent = character.name;
+            resetWorld();
+            selectPanel.hidden = true;
+            stage.hidden = false;
+            draw();
+            start();
+            openScroll();
+        });
+    });
+
+    document.getElementById('game-change').addEventListener('click', () => {
+        stop();
+        stage.hidden = true;
+        selectPanel.hidden = false;
+        const first = selectPanel.querySelector('.game-pick');
+        if (first) {
+            first.focus();
+        }
+    });
+
+    const keyName = (event) => {
+        switch (event.key) {
+            case 'ArrowLeft': case 'a': case 'A': return 'left';
+            case 'ArrowRight': case 'd': case 'D': return 'right';
+            case 'ArrowUp': case 'w': case 'W': return 'up';
+            case 'ArrowDown': case 's': case 'S': return 'down';
+            default: return null;
+        }
+    };
+
+    document.addEventListener('keydown', (event) => {
+        if (scrollOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeScroll();
+            } else if (event.key === 'Tab') {
+                // Keep keyboard focus inside the open scroll.
+                const focusable = [scrollText, scrollClose];
+                const index = focusable.indexOf(document.activeElement);
+                event.preventDefault();
+                const next = event.shiftKey ? (index <= 0 ? 1 : index - 1) : (index + 1) % focusable.length;
+                focusable[next].focus();
+            }
+            return;
+        }
+        if (running && (event.key === 'e' || event.key === 'E') && !event.ctrlKey && !event.metaKey && !event.altKey
+            && !event.target.closest('input, textarea, select')) {
+            event.preventDefault();
+            if (!event.repeat) {
+                doAction();
+            }
+            return;
+        }
+        if (running && event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey
+            && !event.target.closest('input, textarea, select, button, a')) {
+            event.preventDefault();
+            if (!event.repeat) {
+                jump();
+            }
+            return;
+        }
+        const name = keyName(event);
+        if (!running || !name || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+        if (event.target.closest('input, textarea, select')) {
+            return;
+        }
+        keys.add(name);
+        event.preventDefault();
+    });
+    document.addEventListener('keyup', (event) => {
+        const name = keyName(event);
+        if (name) {
+            keys.delete(name);
+        }
+    });
+    window.addEventListener('blur', () => {
+        keys.clear();
+        Object.keys(held).forEach((side) => { held[side] = false; });
+    });
+
+    const bindHold = (button, side) => {
+        const release = () => { held[side] = false; button.classList.remove('active'); };
+        button.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            held[side] = true;
+            button.classList.add('active');
+            button.setPointerCapture(event.pointerId);
+        });
+        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => button.addEventListener(type, release));
+        // Keyboard or switch activation: take a short walk instead of a hold.
+        button.addEventListener('click', (event) => {
+            if (event.detail === 0) {
+                held[side] = true;
+                setTimeout(() => { held[side] = false; }, 300);
+            }
+        });
+        button.addEventListener('contextmenu', (event) => event.preventDefault());
+    };
+    bindHold(leftBtn, 'left');
+    bindHold(rightBtn, 'right');
+    bindHold(upBtn, 'up');
+    bindHold(downBtn, 'down');
+    jumpBtn.addEventListener('click', jump);
+    actionBtn.addEventListener('click', () => {
+        doAction();
+        canvas.focus({ preventScroll: true });
+    });
+    scrollBtn.addEventListener('click', openScroll);
+    scrollClose.addEventListener('click', closeScroll);
+})();
+</script>
+
 
 <div class="credits fade-section">
     Created by Akram Syed
