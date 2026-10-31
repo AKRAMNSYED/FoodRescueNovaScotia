@@ -231,6 +231,15 @@ class CreateSubadminsCommandTests(TestCase):
 		self.assertEqual(mocked_getpass.call_count, 2)
 
 
+class GamePageTests(TestCase):
+	def test_game_page_is_public_and_linked_in_nav(self):
+		response = self.client.get(reverse('game'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Coming soon')
+		self.assertContains(response, f'href="{reverse("game")}"')
+
+
 class CreateMainAdminCommandTests(TestCase):
 	@patch(
 		'core.management.commands.create_main_admin.getpass.getpass',

@@ -347,6 +347,7 @@
             {% if user.is_authenticated and user.is_staff %}
                 <a href="{% url 'chat' %}"{% if current == 'chat' %} aria-current="page"{% endif %}>Chat</a>
             {% endif %}
+            <a href="{% url 'game' %}"{% if current == 'game' %} aria-current="page"{% endif %}>Game</a>
             <a href="{% url 'donations' %}"{% if current == 'donations' or current == 'donation_success' %} aria-current="page"{% endif %}>Donations</a>
             <a href="/admin/">Admin Login</a>
         </div>

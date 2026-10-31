@@ -232,6 +232,10 @@ def delete_comment(request, comment_id):
     return redirect('events')
 
 
+def game(request):
+    return render(request, 'core/game.html')
+
+
 def donations(request):
     return render(request, 'core/donations.html', {
         'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY,
