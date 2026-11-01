@@ -262,6 +262,16 @@
         </div>
     </div>
 
+    <div class="scroll-overlay" id="fail-overlay" hidden>
+        <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="fail-title" aria-describedby="fail-text">
+            <h2 id="fail-title">Quest failed</h2>
+            <p id="fail-text">You had no can of food to give, so AJ Smeltzer would not let you in. You have to start again.</p>
+            <div class="confirm-actions">
+                <button type="button" class="game-btn" id="fail-restart">Restart</button>
+            </div>
+        </div>
+    </div>
+
     <div class="scroll-overlay" id="confirm-overlay" hidden>
         <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
             <h2 id="confirm-title">Are you sure?</h2>
@@ -718,9 +728,7 @@
             if (food > 0) {
                 return { id: 'enter', label: 'Give 1 can to enter (E)', enabled: true };
             }
-            if (!helpUsed) {
-                return { id: 'help', label: 'Ask a neighbour for a can (E)', enabled: true };
-            }
+            return { id: 'fail', label: 'Try to enter (E)', enabled: true };
         }
         if (questStage === 'done' && q2Stage === 'play' && nearBuilding(buildings.aj)) {
             return { id: 'bingo', label: 'Play bingo (E)', enabled: true };
@@ -750,18 +758,31 @@
             say(['Welcome to bingo night!']);
             updateHud();
             openBingo();
-        } else if (action.id === 'help') {
-            helpUsed = true;
-            food += 1;
-            floatText('+1 food', '#15803d');
-            say(['A kind neighbour gave you a can so you can get in.']);
-            updateHud();
+        } else if (action.id === 'fail') {
+            failQuest();
         } else if (action.id === 'bingo') {
             openBingo();
         } else if (action.id === 'trade') {
             tradeBall();
         }
     };
+
+    const failOverlay = document.getElementById('fail-overlay');
+    const failRestart = document.getElementById('fail-restart');
+
+    const failQuest = () => {
+        stop();
+        failOverlay.hidden = false;
+        failRestart.focus();
+    };
+
+    failRestart.addEventListener('click', () => {
+        failOverlay.hidden = true;
+        resetWorld();
+        draw();
+        start();
+        openScroll();
+    });
 
     const tradeBall = () => {
         hasBall = false;
