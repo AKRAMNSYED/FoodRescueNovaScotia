@@ -257,6 +257,7 @@
         load(root.dataset.sobeys), load(root.dataset.feed),
     ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed]) => ({
         bg, sun, cloud, road: buildRoadMap(bg),
+        bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
         sobeys, feed,
         characters: {
             eve: { name: 'Eve', stand: eveStand, walk: eveWalk },
@@ -323,6 +324,23 @@
     let delivered = 0;
     let confirmOpen = false;
     let questStarted = false;
+    // It turns to night after one minute of play, fading in over a few seconds.
+    const NIGHT_AFTER = 60;
+    const NIGHT_FADE = 4;
+    let playTime = 0;
+    let night = 0;
+    let nightAnnounced = false;
+    const stars = (() => {
+        let seed = 7;
+        const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+        return Array.from({ length: 70 }, () => ({
+            x: Math.floor(rand() * 940) + 8,
+            y: Math.floor(rand() * 330) + 6,
+            size: rand() < 0.25 ? 4 : 2,
+            rate: 1 + rand() * 3,
+            phase: rand() * 6.28,
+        }));
+    })();
 
     const spawnCloud = (drawX) => {
         clouds.push({
@@ -346,6 +364,10 @@
         delivered = 0;
         questStarted = false;
         confirmOpen = false;
+        confirmOverlay.hidden = true;
+        playTime = 0;
+        night = 0;
+        nightAnnounced = false;
         confirmOverlay.hidden = true;
         questStage = 'shop';
         sobeysIntroDone = false;
@@ -406,6 +428,42 @@
             }
         }
         return { tops, bottoms };
+    };
+
+    // Night copy of the background: only the sky pixels turn black, the ground stays as is.
+    const buildNightSky = (bg) => {
+        const off = document.createElement('canvas');
+        off.width = bg.width;
+        off.height = bg.height;
+        const octx = off.getContext('2d', { willReadFrequently: true });
+        octx.drawImage(bg, 0, 0);
+        const image = octx.getImageData(0, 0, bg.width, bg.height);
+        const data = image.data;
+        for (let y = 0; y < Math.min(bg.height, 420); y++) {
+            for (let x = 0; x < bg.width; x++) {
+                const i = (y * bg.width + x) * 4;
+                // Also catches the blended edge pixels between the sky and the road outline.
+                if (data[i + 2] - data[i] > 70 && data[i + 2] > 100) {
+                    data[i] = 0;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                }
+            }
+        }
+        octx.putImageData(image, 0, 0);
+        return off;
+    };
+
+    const buildDarkCloud = (cloud) => {
+        const off = document.createElement('canvas');
+        off.width = cloud.width;
+        off.height = cloud.height;
+        const octx = off.getContext('2d');
+        octx.drawImage(cloud, 0, 0);
+        octx.globalCompositeOperation = 'source-atop';
+        octx.fillStyle = 'rgba(25, 28, 52, 0.72)';
+        octx.fillRect(0, 0, off.width, off.height);
+        return off;
     };
 
     const columnAt = (worldX) => {
@@ -669,6 +727,12 @@
 
     const update = (dt) => {
         updateQuest(dt);
+        playTime += dt;
+        night = Math.min(1, Math.max(0, (playTime - NIGHT_AFTER) / (reduceMotion ? 0.001 : NIGHT_FADE)));
+        if (night > 0 && !nightAnnounced) {
+            nightAnnounced = true;
+            statusBox.textContent = 'Night has fallen. The sky is dark and the stars are out.';
+        }
         if (jumpV !== 0 || jumpH > 0) {
             jumpV -= GRAVITY * dt;
             jumpH += jumpV * dt;
@@ -713,17 +777,56 @@
         const first = Math.floor(scrollX / BG_W);
         for (let i = first; i * BG_W - scrollX < W; i++) {
             const x = Math.round(i * BG_W - scrollX);
-            if (Math.abs(i) % 2 === 0) {
-                ctx.drawImage(assets.bg, x, 0);
-            } else {
+            const mirrored = Math.abs(i) % 2 !== 0;
+            ctx.save();
+            if (mirrored) {
                 // Mirror every other tile so the edges always line up.
-                ctx.save();
                 ctx.translate(x + BG_W, 0);
                 ctx.scale(-1, 1);
-                ctx.drawImage(assets.bg, 0, 0);
-                ctx.restore();
+            } else {
+                ctx.translate(x, 0);
+            }
+            ctx.drawImage(assets.bg, 0, 0);
+            if (night > 0) {
+                ctx.globalAlpha = night;
+                ctx.drawImage(assets.bgNight, 0, 0);
+            }
+            ctx.restore();
+        }
+    };
+
+    const drawStars = () => {
+        const t = performance.now() / 1000;
+        for (const star of stars) {
+            const twinkle = reduceMotion ? 1 : 0.65 + 0.35 * Math.sin(t * star.rate + star.phase);
+            ctx.globalAlpha = night * twinkle;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(star.x, star.y, star.size, star.size);
+        }
+        ctx.globalAlpha = 1;
+    };
+
+    const drawMoon = () => {
+        const cx = SUN_X + assets.sun.width / 2;
+        const cy = SUN_Y + assets.sun.height / 2;
+        const radius = Math.max(assets.sun.width, assets.sun.height) * 0.42;
+        const cell = 6;
+        ctx.globalAlpha = night;
+        for (let gy = -radius; gy < radius; gy += cell) {
+            for (let gx = -radius; gx < radius; gx += cell) {
+                const mx = gx + cell / 2;
+                const my = gy + cell / 2;
+                if (mx * mx + my * my <= radius * radius) {
+                    ctx.fillStyle = '#f3f0d2';
+                    ctx.fillRect(Math.round(cx + gx), Math.round(cy + gy), cell, cell);
+                }
             }
         }
+        ctx.fillStyle = '#cfcaa3';
+        [[-8, -10], [10, 2], [-6, 12], [4, -16]].forEach(([dx, dy]) => {
+            ctx.fillRect(Math.round(cx + dx), Math.round(cy + dy), cell, cell);
+        });
+        ctx.globalAlpha = 1;
     };
 
     const drawCharacter = () => {
@@ -933,11 +1036,27 @@
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, W, H);
         drawBackground();
-        ctx.drawImage(assets.sun, SUN_X, SUN_Y);
+        if (night > 0) {
+            drawStars();
+        }
+        if (night < 1) {
+            ctx.globalAlpha = 1 - night;
+            ctx.drawImage(assets.sun, SUN_X, SUN_Y);
+            ctx.globalAlpha = 1;
+        }
+        if (night > 0) {
+            drawMoon();
+        }
         for (const cloud of clouds) {
             const x = cloud.x - scrollX * CLOUD_PARALLAX;
-            ctx.drawImage(assets.cloud, Math.round(x), Math.round(cloud.y),
-                Math.round(assets.cloud.width * cloud.scale), Math.round(assets.cloud.height * cloud.scale));
+            const cw = Math.round(assets.cloud.width * cloud.scale);
+            const ch = Math.round(assets.cloud.height * cloud.scale);
+            ctx.drawImage(assets.cloud, Math.round(x), Math.round(cloud.y), cw, ch);
+            if (night > 0) {
+                ctx.globalAlpha = night;
+                ctx.drawImage(assets.cloudNight, Math.round(x), Math.round(cloud.y), cw, ch);
+                ctx.globalAlpha = 1;
+            }
         }
         drawBuildings();
         drawCharacter();
