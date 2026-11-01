@@ -37,6 +37,7 @@
     }
     .game-hud-item { display: flex; align-items: center; gap: 0.4rem; font-size: 1.15rem; }
     .game-hud-item img { height: 32px; width: auto; image-rendering: pixelated; }
+    .game-hud-item[hidden], .bingo-info [hidden] { display: none !important; }
     .game-quest { flex: 1 1 260px; text-align: left; font-weight: 600; line-height: 1.35; }
     .game-quest strong { display: block; }
     .game-hud .game-btn { min-width: 0; min-height: 44px; font-size: 0.95rem; padding: 0.4rem 0.9rem; touch-action: auto; }
@@ -75,6 +76,43 @@
     .confirm-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
     .confirm-actions .game-btn { min-width: 0; touch-action: auto; }
     .game-pad-move, .game-pad-act { display: contents; }
+    .bingo-dialog {
+        display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; justify-content: center; align-items: center;
+        width: min(96vw, 860px); max-height: 94vh; overflow-y: auto; padding: 1.1rem;
+        background: #fffbe6; color: #3b2f0b; border: 4px solid #1d4ed8; border-radius: 16px;
+    }
+    .bingo-info { flex: 1 1 260px; max-width: 360px; text-align: center; }
+    .bingo-info h2 { margin: 0 0 0.4rem; color: #1e3a8a; font-size: 1.3rem; }
+    .bingo-info p { margin: 0.35rem 0; line-height: 1.35; }
+    .bingo-rule { font-size: 0.95rem; }
+    .bingo-call {
+        margin: 0.6rem auto; padding: 0.4rem 0.8rem; min-width: 150px; width: fit-content;
+        background: #1e3a8a; color: #fde047; border-radius: 14px; font-size: 2rem; font-weight: 700;
+    }
+    .bingo-timer { font-weight: 700; color: #92400e; min-height: 1.4em; }
+    .bingo-called { font-weight: 600; }
+    .bingo-msg { font-weight: 700; color: #1e3a8a; min-height: 1.4em; }
+    .bingo-board { position: relative; flex: 0 1 380px; width: min(100%, 380px); aspect-ratio: 1; }
+    .bingo-card-img { display: block; width: 100%; height: 100%; }
+    .bingo-grid {
+        position: absolute; left: 8.8%; top: 16%; width: 82.8%; height: 82%;
+        display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+    }
+    .bingo-cell {
+        position: relative; display: flex; align-items: center; justify-content: center;
+        padding: 0; margin: 0; background: transparent; border: 2px solid transparent; border-radius: 6px;
+        cursor: pointer; touch-action: manipulation;
+    }
+    .bingo-cell:hover { background: rgba(250, 204, 21, 0.25); }
+    .bingo-cell:focus-visible { outline: 3px solid #f97316; outline-offset: -3px; }
+    .bingo-cell img { width: 86%; height: 86%; object-fit: contain; opacity: 0.7; pointer-events: none; }
+    @media (orientation: landscape) and (max-height: 520px) {
+        .bingo-board { flex-basis: 250px; width: min(100%, 250px); }
+        .bingo-info { flex-basis: 240px; }
+        .bingo-info h2 { font-size: 1.05rem; }
+        .bingo-call { font-size: 1.4rem; margin: 0.3rem auto; }
+        .bingo-rule { font-size: 0.8rem; }
+    }
     .game-rotate-hint {
         display: none; margin: 0 0 0.75rem; padding: 0.6rem 0.9rem; background: #fff9c4; color: #5c4b00;
         border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; font-weight: 600; text-align: left;
@@ -108,6 +146,10 @@
      data-bg="{% static 'Game/Scrollable_Background.png' %}"
      data-sun="{% static 'Game/Sun.png' %}"
      data-moon="{% static 'Game/Moon.png' %}"
+     data-aj="{% static 'Game/AJ_SMELTZER.png' %}"
+     data-trading="{% static 'Game/Trading.png' %}"
+     data-ball="{% static 'Game/Soccer_ball.png' %}"
+     data-counter="{% static 'Game/Bingo Counter.png' %}"
      data-cloud="{% static 'Game/Cloud.png' %}"
      data-eve-stand="{% static 'Game/Eve_Standing.png' %}"
      data-eve-walk="{% static 'Game/Eve_Walk.png' %}"
@@ -143,6 +185,7 @@
             <div class="game-hud-item"><img src="{% static 'Game/Money.png' %}" alt="Money"><span id="hud-money">$15</span></div>
             <div class="game-hud-item"><img src="{% static 'Game/Food.png' %}" alt="Food"><span id="hud-food">0/3</span></div>
             <div class="game-hud-item"><span aria-hidden="true">&#9733;</span><span id="hud-points">0 points</span></div>
+            <div class="game-hud-item" id="hud-ball-item" hidden><img src="{% static 'Game/Soccer_ball.png' %}" alt="Soccer ball"><span>Soccer ball</span></div>
             <div class="game-quest">
                 <strong id="hud-quest-title"></strong>
                 <span id="hud-quest-text"></span>
@@ -197,10 +240,32 @@
         </div>
     </div>
 
+    <div class="scroll-overlay" id="bingo-overlay" hidden>
+        <div class="bingo-dialog" role="dialog" aria-modal="true" aria-labelledby="bingo-title">
+            <div class="bingo-info">
+                <h2 id="bingo-title">Bingo at A.J. Smeltzer</h2>
+                <p class="bingo-rule">Click a number on your card when it is called. Click the FREE space too. Get 5 in a row on the diagonal, from the top left to the bottom right, to win!</p>
+                <div class="bingo-call" id="bingo-call" aria-hidden="true">Get ready...</div>
+                <p class="bingo-timer" id="bingo-timer"></p>
+                <p class="bingo-called" id="bingo-called">Called: none yet</p>
+                <p class="bingo-msg" id="bingo-msg" role="status"></p>
+                <p class="game-sr-only" id="bingo-live" aria-live="assertive"></p>
+                <div class="confirm-actions">
+                    <button type="button" class="game-btn" id="bingo-win" hidden>Take the soccer ball</button>
+                    <button type="button" class="game-btn secondary" id="bingo-leave">Leave bingo</button>
+                </div>
+            </div>
+            <div class="bingo-board" id="bingo-board">
+                <img src="{% static 'Game/Bingo_Card.png' %}" alt="" class="bingo-card-img">
+                <div class="bingo-grid" id="bingo-grid"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="scroll-overlay" id="confirm-overlay" hidden>
         <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
             <h2 id="confirm-title">Are you sure?</h2>
-            <p id="confirm-text">Quest 2 is already unlocked. Shouldn't you save the last can for yourself?</p>
+            <p id="confirm-text">Quest 2 is already unlocked and you may need that can to get in. Shouldn't you save it for yourself?</p>
             <div class="confirm-actions">
                 <button type="button" class="game-btn" id="confirm-keep">Keep it</button>
                 <button type="button" class="game-btn secondary" id="confirm-give">Give it anyway</button>
@@ -256,10 +321,11 @@
         load(root.dataset.eveStand), load(root.dataset.eveWalk),
         load(root.dataset.jimStand), load(root.dataset.jimWalk),
         load(root.dataset.sobeys), load(root.dataset.feed), load(root.dataset.moon),
-    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon]) => ({
-        bg, sun, moon, cloud, road: buildRoadMap(bg),
+        load(root.dataset.aj), load(root.dataset.trading), load(root.dataset.counter),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter]) => ({
+        bg, sun, moon, cloud, road: buildRoadMap(bg), counter,
         bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
-        sobeys, feed,
+        sobeys, feed, aj, trading,
         characters: {
             eve: { name: 'Eve', stand: eveStand, walk: eveWalk },
             jim: { name: 'Jim', stand: jimStand, walk: jimWalk },
@@ -294,6 +360,28 @@
     let money = START_MONEY;
     let food = 0;
     let points = 0;
+    const AJ_STEPS = 200; // right of Sobeys
+    const TRADING_STEPS = 100; // left of AJ Smeltzer
+    const BINGO_CALLS = [6, 71, 46, 26];
+    const BINGO_FIRST = 5;
+    const BINGO_GAP = 15;
+    const BINGO_ROWS = [
+        [6, 29, 34, 47, 75],
+        [2, 26, 41, 59, 73],
+        [3, 25, 'FREE', 57, 64],
+        [11, 27, 31, 46, 68],
+        [15, 21, 37, 48, 71],
+    ];
+    const BINGO_LETTERS = { 6: 'B', 71: 'O', 46: 'G', 26: 'I' };
+    let q2Stage = 'enter'; // 'enter' -> 'play' -> 'trade' -> 'done'
+    let hasBall = false;
+    let helpUsed = false;
+    let ajIntroDone = false;
+    let bingoOpen = false;
+    let bingoStart = 0;
+    let bingoTimer = null;
+    let bingoCalled = 0;
+    let bingoMarks = new Set();
     let questStage = 'shop'; // 'shop' -> 'deliver' -> 'done'
     let sobeysIntroDone = false;
     let scrollOpen = false;
@@ -309,6 +397,16 @@
     const hudMoney = document.getElementById('hud-money');
     const hudFood = document.getElementById('hud-food');
     const hudPoints = document.getElementById('hud-points');
+    const hudBallItem = document.getElementById('hud-ball-item');
+    const bingoOverlay = document.getElementById('bingo-overlay');
+    const bingoGrid = document.getElementById('bingo-grid');
+    const bingoCall = document.getElementById('bingo-call');
+    const bingoTimerEl = document.getElementById('bingo-timer');
+    const bingoCalledEl = document.getElementById('bingo-called');
+    const bingoMsg = document.getElementById('bingo-msg');
+    const bingoLive = document.getElementById('bingo-live');
+    const bingoWin = document.getElementById('bingo-win');
+    const bingoLeave = document.getElementById('bingo-leave');
     const hudTitle = document.getElementById('hud-quest-title');
     const hudText = document.getElementById('hud-quest-text');
     const hudArrow = document.getElementById('hud-quest-arrow');
@@ -325,9 +423,9 @@
     let delivered = 0;
     let confirmOpen = false;
     let questStarted = false;
-    // Night starts one minute after Quest 1 is complete, then fades in.
-    const NIGHT_AFTER = 60;
-    const NIGHT_FADE = 8;
+    // Night starts 10 seconds after Quest 1 is complete (bingo night), then fades in.
+    const NIGHT_AFTER = 10;
+    const NIGHT_FADE = 5;
     let playTime = 0;
     let night = 0;
     let nightAnnounced = false;
@@ -371,6 +469,11 @@
         nightAnnounced = false;
         confirmOverlay.hidden = true;
         questStage = 'shop';
+        q2Stage = 'enter';
+        hasBall = false;
+        helpUsed = false;
+        ajIntroDone = false;
+        closeBingo(true);
         sobeysIntroDone = false;
         bubble = null;
         bubbleQueue = [];
@@ -378,6 +481,8 @@
         banner = null;
         buildings.sobeys = { name: 'Sobeys', img: assets.sobeys, scale: 0.85, x: W / 2 + SOBEYS_STEPS * STEP };
         buildings.feed = { name: 'Feed Nova Scotia', img: assets.feed, scale: 0.75, x: W / 2 - FEED_STEPS * STEP };
+        buildings.aj = { name: 'AJ Smeltzer', img: assets.aj, scale: 0.7, x: buildings.sobeys.x + AJ_STEPS * STEP };
+        buildings.trading = { name: 'Trading Post', img: assets.trading, scale: 0.8, x: buildings.aj.x - TRADING_STEPS * STEP };
         updateHud();
         clouds = [];
         for (let i = 0; i < 5; i++) {
@@ -503,7 +608,13 @@
         if (questStage === 'shop') {
             return buildings.sobeys;
         }
-        return questStage === 'deliver' ? buildings.feed : null;
+        if (questStage === 'deliver') {
+            return buildings.feed;
+        }
+        if (q2Stage === 'enter' || q2Stage === 'play') {
+            return buildings.aj;
+        }
+        return q2Stage === 'trade' ? buildings.trading : null;
     };
 
     const updateHud = () => {
@@ -516,10 +627,20 @@
         } else if (questStage === 'deliver') {
             hudTitle.textContent = 'Quest 1: Bring the food to Feed Nova Scotia';
             hudText.textContent = 'You have ' + food + (food === 1 ? ' can' : ' cans') + '. Give ' + DELIVER_GOAL + ' to Feed Nova Scotia to unlock the next quest (' + delivered + '/' + DELIVER_GOAL + ' given).';
+        } else if (q2Stage === 'enter') {
+            hudTitle.textContent = 'Quest 2: Bingo at A.J. Smeltzer';
+            hudText.textContent = 'Go to AJ Smeltzer and give 1 can of food to enter.' + (food > 0 ? '' : ' You have no cans left.');
+        } else if (q2Stage === 'play') {
+            hudTitle.textContent = 'Quest 2: Win at bingo';
+            hudText.textContent = 'Mark the called numbers and the FREE space to win the soccer ball.';
+        } else if (q2Stage === 'trade') {
+            hudTitle.textContent = 'Quest 2: Trade the soccer ball';
+            hudText.textContent = 'Take the soccer ball to the Trading Post and exchange it for $25.';
         } else {
-            hudTitle.textContent = 'Quest 1 complete! +1 point';
-            hudText.textContent = 'Quest 2 is unlocked. It is coming soon!' + (food > 0 ? ' You still have 1 can: keep it or give it.' : '');
+            hudTitle.textContent = 'Quest 2 complete! +1 point';
+            hudText.textContent = 'You traded the soccer ball for $25. More quests are coming soon!';
         }
+        hudBallItem.hidden = !hasBall;
     };
 
     const say = (lines) => {
@@ -574,40 +695,193 @@
         points += 1;
         questStage = 'done';
         floatText('+1 point', '#15803d');
-        banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked - coming soon'], age: 0 };
+        banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked: go to AJ Smeltzer'], age: 0 };
         say(['Thank you! Every can helps a neighbour in need.']);
         if (food > 0) {
-            say(['You still have 1 can. Maybe keep it for yourself?']);
+            say(['I should keep 1 can. I might need it to get into bingo!']);
         }
-        statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked and coming soon. You still have 1 can; you can keep it.';
+        statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked: follow the arrow to AJ Smeltzer. Keep 1 can to get in.';
         updateHud();
     };
 
     const actionState = () => {
-        if (scrollOpen || confirmOpen) {
-            return { label: 'Interact (E)', enabled: false };
+        if (scrollOpen || confirmOpen || bingoOpen) {
+            return { id: '', label: 'Interact (E)', enabled: false };
         }
         if (questStage === 'shop' && nearBuilding(buildings.sobeys) && food < FOOD_GOAL) {
-            return { label: 'Buy food ($' + FOOD_PRICE + ') (E)', enabled: money >= FOOD_PRICE };
+            return { id: 'buy', label: 'Buy food ($' + FOOD_PRICE + ') (E)', enabled: money >= FOOD_PRICE };
         }
         if (questStage === 'deliver' && nearBuilding(buildings.feed) && food > 0) {
-            return { label: 'Give 1 can to Feed NS (E)', enabled: true };
+            return { id: 'give', label: 'Give 1 can to Feed NS (E)', enabled: true };
+        }
+        if (questStage === 'done' && q2Stage === 'enter' && nearBuilding(buildings.aj)) {
+            if (food > 0) {
+                return { id: 'enter', label: 'Give 1 can to enter (E)', enabled: true };
+            }
+            if (!helpUsed) {
+                return { id: 'help', label: 'Ask a neighbour for a can (E)', enabled: true };
+            }
+        }
+        if (questStage === 'done' && q2Stage === 'play' && nearBuilding(buildings.aj)) {
+            return { id: 'bingo', label: 'Play bingo (E)', enabled: true };
+        }
+        if (questStage === 'done' && q2Stage === 'trade' && nearBuilding(buildings.trading)) {
+            return { id: 'trade', label: 'Trade soccer ball for $25 (E)', enabled: true };
         }
         if (questStage === 'done' && nearBuilding(buildings.feed) && food > 0) {
-            return { label: 'Give last can to Feed NS (E)', enabled: true };
+            return { id: 'give', label: 'Give last can to Feed NS (E)', enabled: true };
         }
-        return { label: 'Interact (E)', enabled: false };
+        return { id: '', label: 'Interact (E)', enabled: false };
     };
 
     const doAction = () => {
-        if (!running || !actionState().enabled) {
+        const action = actionState();
+        if (!running || !action.enabled) {
             return;
         }
-        if (questStage === 'shop') {
+        if (action.id === 'buy') {
             buy();
-        } else {
+        } else if (action.id === 'give') {
             deliver();
+        } else if (action.id === 'enter') {
+            food -= 1;
+            q2Stage = 'play';
+            floatText('-1 can', '#b91c1c');
+            say(['Welcome to bingo night!']);
+            updateHud();
+            openBingo();
+        } else if (action.id === 'help') {
+            helpUsed = true;
+            food += 1;
+            floatText('+1 food', '#15803d');
+            say(['A kind neighbour gave you a can so you can get in.']);
+            updateHud();
+        } else if (action.id === 'bingo') {
+            openBingo();
+        } else if (action.id === 'trade') {
+            tradeBall();
         }
+    };
+
+    const tradeBall = () => {
+        hasBall = false;
+        money += 25;
+        points += 1;
+        q2Stage = 'done';
+        floatText('+$25', '#15803d');
+        floatText('+1 point', '#15803d');
+        banner = { lines: ['QUEST 2 COMPLETE!  +1 point', 'The sun is coming back up'], age: 0 };
+        say(['A soccer ball for $25. Nice trade!']);
+        statusBox.textContent = 'Quest 2 complete. You traded the soccer ball for $25 and earned 1 point. Morning has come.';
+        updateHud();
+    };
+
+    const bingoCell = (value) => {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'bingo-cell';
+        cell.dataset.value = String(value);
+        cell.setAttribute('aria-pressed', 'false');
+        cell.setAttribute('aria-label', value === 'FREE' ? 'Free space' : 'Number ' + value);
+        cell.addEventListener('click', () => markBingo(value, cell));
+        return cell;
+    };
+
+    const buildBingoGrid = () => {
+        bingoGrid.textContent = '';
+        BINGO_ROWS.forEach((row) => row.forEach((value) => bingoGrid.appendChild(bingoCell(value))));
+    };
+
+    const checkBingoWin = () => {
+        const diagonal = BINGO_ROWS.map((row, i) => row[i]);
+        if (diagonal.every((v) => bingoMarks.has(v))) {
+            bingoMsg.textContent = 'BINGO! You win!';
+            bingoLive.textContent = 'Bingo! You win the soccer ball.';
+            bingoWin.hidden = false;
+            bingoWin.focus();
+            clearInterval(bingoTimer);
+            bingoTimer = null;
+            bingoTimerEl.textContent = '';
+        }
+    };
+
+    const markBingo = (value, cell) => {
+        if (bingoMarks.has(value)) {
+            return;
+        }
+        const called = value === 'FREE' || BINGO_CALLS.slice(0, bingoCalled).includes(value);
+        if (!called) {
+            bingoMsg.textContent = value + ' has not been called.';
+            return;
+        }
+        bingoMarks.add(value);
+        cell.setAttribute('aria-pressed', 'true');
+        const img = document.createElement('img');
+        img.src = assets.counter.src;
+        img.alt = '';
+        cell.appendChild(img);
+        bingoMsg.textContent = 'Counter placed on ' + (value === 'FREE' ? 'the free space' : value) + '.';
+        checkBingoWin();
+    };
+
+    const tickBingo = () => {
+        const elapsed = (performance.now() - bingoStart) / 1000;
+        const due = elapsed < BINGO_FIRST ? 0 : Math.min(BINGO_CALLS.length, 1 + Math.floor((elapsed - BINGO_FIRST) / BINGO_GAP));
+        if (due > bingoCalled) {
+            bingoCalled = due;
+            const n = BINGO_CALLS[bingoCalled - 1];
+            bingoCall.textContent = BINGO_LETTERS[n] + ' ' + n;
+            bingoCalledEl.textContent = 'Called: ' + BINGO_CALLS.slice(0, bingoCalled).join(', ');
+            bingoLive.textContent = 'Number called: ' + BINGO_LETTERS[n] + ' ' + n;
+            bingoMsg.textContent = '';
+        }
+        if (bingoTimer && bingoCalled < BINGO_CALLS.length) {
+            const nextAt = BINGO_FIRST + bingoCalled * BINGO_GAP;
+            bingoTimerEl.textContent = 'Next number in ' + Math.max(0, Math.ceil(nextAt - elapsed)) + 's';
+        } else if (bingoTimer) {
+            bingoTimerEl.textContent = 'All numbers called. Finish your card!';
+        }
+    };
+
+    const openBingo = () => {
+        bingoOpen = true;
+        Object.keys(held).forEach((side) => { held[side] = false; });
+        keys.clear();
+        bingoCalled = 0;
+        bingoMarks = new Set();
+        buildBingoGrid();
+        bingoCall.textContent = 'Get ready...';
+        bingoCalledEl.textContent = 'Called: none yet';
+        bingoMsg.textContent = '';
+        bingoWin.hidden = true;
+        bingoOverlay.hidden = false;
+        bingoStart = performance.now();
+        clearInterval(bingoTimer);
+        bingoTimer = setInterval(tickBingo, 200);
+        tickBingo();
+        bingoLeave.focus();
+    };
+
+    const closeBingo = (silent) => {
+        clearInterval(bingoTimer);
+        bingoTimer = null;
+        bingoOpen = false;
+        bingoOverlay.hidden = true;
+        if (!silent) {
+            lastTime = performance.now();
+            canvas.focus({ preventScroll: true });
+        }
+    };
+
+    const takeBall = () => {
+        hasBall = true;
+        q2Stage = 'trade';
+        closeBingo();
+        floatText('+ soccer ball', '#15803d');
+        banner = { lines: ['YOU WON THE SOCCER BALL!', 'Take it to the Trading Post'], age: 0 };
+        say(['I won! Now to trade this at the Trading Post.']);
+        statusBox.textContent = 'You won the soccer ball. Follow the arrow to the Trading Post.';
+        updateHud();
     };
 
     const arrowText = () => {
@@ -629,6 +903,10 @@
         if (questStage === 'shop' && !sobeysIntroDone && nearBuilding(buildings.sobeys)) {
             sobeysIntroDone = true;
             say(['Why is food so expensive?!', 'I only have $' + money + ' to get food and feed Nova Scotia...']);
+        }
+        if (questStage === 'done' && q2Stage === 'enter' && !ajIntroDone && nearBuilding(buildings.aj)) {
+            ajIntroDone = true;
+            say(['Bingo night at A.J. Smeltzer!', 'It costs 1 can of food to get in.']);
         }
         if (bubble) {
             bubble.age += dt;
@@ -680,11 +958,20 @@
                 + '<p>You have ' + food + (food === 1 ? ' can' : ' cans') + '. Give ' + DELIVER_GOAL + ' to <strong>Feed Nova Scotia</strong> to unlock the next quest.</p>'
                 + '<p>Progress: ' + delivered + '/' + DELIVER_GOAL + ' cans given.</p>';
         } else {
+            const q2Html = {
+                enter: '<p class="quest-locked"><strong>2. Bingo at A.J. Smeltzer &gt;&gt;&gt; Follow the arrow</strong></p>'
+                    + '<p>Go to <strong>AJ Smeltzer</strong> (200 steps past Sobeys) and give 1 can of food to enter.</p>',
+                play: '<p class="quest-locked"><strong>2. Win at bingo</strong></p>'
+                    + '<p>Mark the called numbers and the FREE space on your card to win a soccer ball.</p>',
+                trade: '<p class="quest-locked"><strong>2. Trade the soccer ball &gt;&gt;&gt; Follow the arrow</strong></p>'
+                    + '<p>Take the soccer ball to the <strong>Trading Post</strong> (100 steps left of AJ Smeltzer) for $25.</p>',
+                done: '<p class="quest-done"><strong>&#10003; 2. Bingo and trading: COMPLETE (+1 point)</strong></p>'
+                    + '<p>You traded the soccer ball for $25. More quests are coming soon!</p>',
+            }[q2Stage];
             html = '<p class="quest-done"><strong>&#10003; 1. Go to a store, buy food: COMPLETE (+1 point)</strong></p>'
-                + '<p>You gave ' + Math.max(delivered, DELIVER_GOAL) + ' cans to <strong>Feed Nova Scotia</strong>. Thank you!'
-                + (food > 0 ? ' You still have 1 can, so you can keep it or give it too.' : '') + '</p>'
-                + '<p class="scroll-label">&mdash; NEXT QUEST UNLOCKED &mdash;</p>'
-                + '<p class="quest-locked"><strong>2. Coming soon...</strong> A new quest is on its way. Keep an eye on this scroll!</p>';
+                + '<p>You gave ' + Math.max(delivered, DELIVER_GOAL) + ' cans to <strong>Feed Nova Scotia</strong>. Thank you!</p>'
+                + '<p class="scroll-label">&mdash; ' + (q2Stage === 'done' ? 'QUEST 2' : 'NEXT QUEST UNLOCKED') + ' &mdash;</p>'
+                + q2Html;
         }
         scrollQuests.innerHTML = html;
         if (questStage === 'shop' && food === 0 && delivered === 0) {
@@ -728,10 +1015,20 @@
 
     const update = (dt) => {
         updateQuest(dt);
-        if (questStage === 'done') {
-            playTime += dt;
+        if (q2Stage === 'done') {
+            // Trading completes Quest 2: night fades away and stays day.
+            if (night > 0) {
+                night = reduceMotion ? 0 : Math.max(0, night - dt / NIGHT_FADE);
+                if (night === 0) {
+                    playTime = 0;
+                }
+            }
+        } else {
+            if (questStage === 'done') {
+                playTime += dt;
+            }
+            night = Math.min(1, Math.max(0, (playTime - NIGHT_AFTER) / (reduceMotion ? 0.001 : NIGHT_FADE)));
         }
-        night = Math.min(1, Math.max(0, (playTime - NIGHT_AFTER) / (reduceMotion ? 0.001 : NIGHT_FADE)));
         if (night > 0 && !nightAnnounced) {
             nightAnnounced = true;
             statusBox.textContent = 'Night has fallen. The sky is dark and the stars are out.';
@@ -1063,7 +1360,7 @@
         }
         const dt = Math.min((time - lastTime) / 1000, 0.05);
         lastTime = time;
-        if (!scrollOpen && !confirmOpen) {
+        if (!scrollOpen && !confirmOpen && !bingoOpen) {
             update(dt);
         }
         draw();
@@ -1085,6 +1382,7 @@
         scrollOverlay.hidden = true;
         confirmOpen = false;
         confirmOverlay.hidden = true;
+        closeBingo(true);
         lastActionLabel = '';
         [leftBtn, rightBtn, upBtn, downBtn, sprintBtn].forEach((button) => button.classList.remove('active'));
     };
@@ -1134,6 +1432,18 @@
     };
 
     document.addEventListener('keydown', (event) => {
+        if (bingoOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeBingo();
+            } else if (event.key === 'Tab') {
+                const focusable = [...bingoGrid.querySelectorAll('button'), bingoWin, bingoLeave].filter((el) => !el.hidden);
+                const index = focusable.indexOf(document.activeElement);
+                event.preventDefault();
+                focusable[event.shiftKey ? (index <= 0 ? focusable.length - 1 : index - 1) : (index + 1) % focusable.length].focus();
+            }
+            return;
+        }
         if (confirmOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -1220,6 +1530,8 @@
     bindHold(upBtn, 'up');
     bindHold(downBtn, 'down');
     bindHold(sprintBtn, 'sprint');
+    bingoLeave.addEventListener('click', () => closeBingo());
+    bingoWin.addEventListener('click', takeBall);
     jumpBtn.addEventListener('click', jump);
     actionBtn.addEventListener('click', () => {
         doAction();
