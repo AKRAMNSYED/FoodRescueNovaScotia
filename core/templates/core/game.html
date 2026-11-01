@@ -145,7 +145,7 @@
             <div class="game-quest">
                 <strong id="hud-quest-title"></strong>
                 <span id="hud-quest-text"></span>
-                <span id="hud-quest-arrow" style="display: block; color: #b45309;"></span>
+                <span id="hud-quest-arrow" style="display: block; margin-top: 0.3rem; width: fit-content; max-width: 100%; padding: 0.2rem 0.7rem; border-radius: 8px; background: #0b3d2e; color: #fde047; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.02em;" hidden></span>
             </div>
             <button type="button" class="game-btn secondary" id="game-scroll-btn">Quest scroll</button>
         </div>
@@ -199,7 +199,7 @@
     <div class="scroll-overlay" id="confirm-overlay" hidden>
         <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
             <h2 id="confirm-title">Are you sure?</h2>
-            <p id="confirm-text">You have given 2 cans already. Shouldn't you save the last can for yourself?</p>
+            <p id="confirm-text">Quest 2 is already unlocked. Shouldn't you save the last can for yourself?</p>
             <div class="confirm-actions">
                 <button type="button" class="game-btn" id="confirm-keep">Keep it</button>
                 <button type="button" class="game-btn secondary" id="confirm-give">Give it anyway</button>
@@ -285,6 +285,7 @@
     const START_MONEY = 15;
     const FOOD_PRICE = 5;
     const FOOD_GOAL = 3;
+    const DELIVER_GOAL = 2; // giving 2 cans unlocks the next quest; the last can is optional
     const BUILDING_BASE = 412;
     const SOBEYS_STEPS = 500;
     const FEED_STEPS = 300; // Feed Nova Scotia is behind you at the start.
@@ -452,13 +453,13 @@
         hudPoints.textContent = points + (points === 1 ? ' point' : ' points');
         if (questStage === 'shop') {
             hudTitle.textContent = 'Quest 1: Go to a store and buy food';
-            hudText.textContent = 'Collect ' + FOOD_GOAL + ' cans of food (' + food + '/' + FOOD_GOAL + '), then bring them to Feed Nova Scotia.';
+            hudText.textContent = 'Collect ' + FOOD_GOAL + ' cans of food (' + food + '/' + FOOD_GOAL + '), then give at least ' + DELIVER_GOAL + ' to Feed Nova Scotia.';
         } else if (questStage === 'deliver') {
             hudTitle.textContent = 'Quest 1: Bring the food to Feed Nova Scotia';
-            hudText.textContent = 'You have ' + food + (food === 1 ? ' can' : ' cans') + '. Walk to Feed Nova Scotia and give them away, one at a time.';
+            hudText.textContent = 'You have ' + food + (food === 1 ? ' can' : ' cans') + '. Give ' + DELIVER_GOAL + ' to Feed Nova Scotia to unlock the next quest (' + delivered + '/' + DELIVER_GOAL + ' given).';
         } else {
             hudTitle.textContent = 'Quest 1 complete! +1 point';
-            hudText.textContent = 'Quest 2 is unlocked. It is coming soon!';
+            hudText.textContent = 'Quest 2 is unlocked. It is coming soon!' + (food > 0 ? ' You still have 1 can: keep it or give it.' : '');
         }
     };
 
@@ -489,7 +490,7 @@
     };
 
     const deliver = () => {
-        if (food === 1 && delivered === FOOD_GOAL - 1) {
+        if (questStage === 'done' && food === 1) {
             openConfirm();
             return;
         }
@@ -500,8 +501,14 @@
         food -= 1;
         delivered += 1;
         floatText('-1 can', '#b91c1c');
-        if (food > 0) {
-            say(['Thank you! ' + food + (food === 1 ? ' can' : ' cans') + ' to go.']);
+        if (questStage === 'done') {
+            say(['Thank you so much! That was very generous.']);
+            updateHud();
+            return;
+        }
+        if (delivered < DELIVER_GOAL) {
+            const left = DELIVER_GOAL - delivered;
+            say(['Thank you! ' + left + (left === 1 ? ' more can' : ' more cans') + ' to unlock the next quest.']);
             updateHud();
             return;
         }
@@ -510,7 +517,10 @@
         floatText('+1 point', '#15803d');
         banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked - coming soon'], age: 0 };
         say(['Thank you! Every can helps a neighbour in need.']);
-        statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked and coming soon.';
+        if (food > 0) {
+            say(['You still have 1 can. Maybe keep it for yourself?']);
+        }
+        statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked and coming soon. You still have 1 can; you can keep it.';
         updateHud();
     };
 
@@ -524,6 +534,9 @@
         if (questStage === 'deliver' && nearBuilding(buildings.feed) && food > 0) {
             return { label: 'Give 1 can to Feed NS (E)', enabled: true };
         }
+        if (questStage === 'done' && nearBuilding(buildings.feed) && food > 0) {
+            return { label: 'Give last can to Feed NS (E)', enabled: true };
+        }
         return { label: 'Interact (E)', enabled: false };
     };
 
@@ -533,7 +546,7 @@
         }
         if (questStage === 'shop') {
             buy();
-        } else if (questStage === 'deliver') {
+        } else {
             deliver();
         }
     };
@@ -548,7 +561,9 @@
         }
         const dx = target.x - playerX();
         const steps = Math.round(Math.abs(dx) / STEP);
-        return (dx > 0 ? '\u25B6\u25B6\u25B6 ' : '\u25C0\u25C0\u25C0 ') + 'Follow the arrow: ' + target.name + ', ' + steps + ' steps';
+        return dx > 0
+            ? target.name + ' \u2501\u2501\u2501\u2501\u25B6  ' + steps + ' steps'
+            : '\u25C0\u2501\u2501\u2501\u2501  ' + target.name + ', ' + steps + ' steps';
     };
 
     const updateQuest = (dt) => {
@@ -588,6 +603,7 @@
         if (arrow !== lastArrowText) {
             lastArrowText = arrow;
             hudArrow.textContent = arrow;
+            hudArrow.hidden = !arrow;
         }
     };
 
@@ -597,16 +613,17 @@
         if (questStage === 'shop') {
             html = '<p><strong>1. Go to a store, buy food &gt;&gt;&gt; Follow the arrow</strong></p>'
                 + '<p class="scroll-label">&mdash; Description &mdash;</p>'
-                + '<p>Collect 3 cans of food, then bring them to this location: <strong>Feed Nova Scotia</strong></p>'
+                + '<p>Collect 3 cans of food, then give at least 2 of them to this location: <strong>Feed Nova Scotia</strong></p>'
                 + '<p>Progress: ' + bought + '/' + FOOD_GOAL + ' cans bought.</p>';
         } else if (questStage === 'deliver') {
             html = '<p><strong>1. Bring the food to Feed Nova Scotia &gt;&gt;&gt; Follow the arrow</strong></p>'
                 + '<p class="scroll-label">&mdash; Description &mdash;</p>'
-                + '<p>You have ' + food + (food === 1 ? ' can' : ' cans') + ' left to give to <strong>Feed Nova Scotia</strong>.</p>'
-                + '<p>Progress: ' + delivered + '/' + FOOD_GOAL + ' cans delivered.</p>';
+                + '<p>You have ' + food + (food === 1 ? ' can' : ' cans') + '. Give ' + DELIVER_GOAL + ' to <strong>Feed Nova Scotia</strong> to unlock the next quest.</p>'
+                + '<p>Progress: ' + delivered + '/' + DELIVER_GOAL + ' cans given.</p>';
         } else {
             html = '<p class="quest-done"><strong>&#10003; 1. Go to a store, buy food: COMPLETE (+1 point)</strong></p>'
-                + '<p>You bought 3 cans and delivered them to <strong>Feed Nova Scotia</strong>. Thank you!</p>'
+                + '<p>You gave ' + Math.max(delivered, DELIVER_GOAL) + ' cans to <strong>Feed Nova Scotia</strong>. Thank you!'
+                + (food > 0 ? ' You still have 1 can, so you can keep it or give it too.' : '') + '</p>'
                 + '<p class="scroll-label">&mdash; NEXT QUEST UNLOCKED &mdash;</p>'
                 + '<p class="quest-locked"><strong>2. Coming soon...</strong> A new quest is on its way. Keep an eye on this scroll!</p>';
         }
@@ -803,22 +820,50 @@
         }
         const toRight = sx > W / 2;
         const steps = Math.round(Math.abs(target.x - playerX()) / STEP);
-        const count = reduceMotion ? 3 : 1 + (Math.floor(chevronTime * 3) % 3);
-        const chevrons = (toRight ? '\u25B6' : '\u25C0').repeat(count);
-        const text = toRight
-            ? target.name.toUpperCase() + '  ' + steps + ' steps  ' + chevrons
-            : chevrons + '  ' + target.name.toUpperCase() + '  ' + steps + ' steps';
-        ctx.font = 'bold 22px sans-serif';
-        const tw = ctx.measureText(text).width + 28;
-        const x = toRight ? W - tw - 10 : 10;
-        const y = 215;
-        ctx.fillStyle = 'rgba(11, 61, 46, 0.88)';
-        roundedRect(x, y, tw, 40, 12);
+        const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
+        const name = target.name.toUpperCase();
+        const sub = steps + ' steps away';
+        ctx.font = '700 26px ' + family;
+        const nameW = ctx.measureText(name).width;
+        ctx.font = '600 17px ' + family;
+        const subW = ctx.measureText(sub).width;
+        const arrowW = 74;
+        const boxW = Math.max(nameW, subW) + arrowW + 44;
+        const boxH = 70;
+        const x = toRight ? W - boxW - 10 : 10;
+        const y = 205;
+        ctx.fillStyle = 'rgba(11, 61, 46, 0.92)';
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 3;
+        roundedRect(x, y, boxW, boxH, 16);
         ctx.fill();
-        ctx.fillStyle = '#fde047';
-        ctx.textBaseline = 'middle';
+        ctx.stroke();
+
+        const textX = toRight ? x + 18 : x + arrowW + 26;
         ctx.textAlign = 'left';
-        ctx.fillText(text, x + 14, y + 21);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#fde047';
+        ctx.font = '700 26px ' + family;
+        ctx.fillText(name, textX, y + 34);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '600 17px ' + family;
+        ctx.fillText(sub, textX, y + 57);
+
+        // Arrow drawn as a shape: a shaft with a head that slides toward the target.
+        const slide = reduceMotion ? 0 : Math.sin(chevronTime * 6) * 5;
+        const dir = toRight ? 1 : -1;
+        const cx = toRight ? x + boxW - 18 - arrowW / 2 : x + 18 + arrowW / 2;
+        const tip = cx + dir * (arrowW / 2 - 2) + dir * slide;
+        const tail = cx - dir * (arrowW / 2 - 4);
+        const cy = y + boxH / 2;
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(Math.min(tail, tip - dir * 18), cy - 5, Math.abs(tip - dir * 18 - tail), 10);
+        ctx.beginPath();
+        ctx.moveTo(tip, cy);
+        ctx.lineTo(tip - dir * 26, cy - 17);
+        ctx.lineTo(tip - dir * 26, cy + 17);
+        ctx.closePath();
+        ctx.fill();
     };
 
     const drawBubble = () => {
