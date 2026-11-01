@@ -245,6 +245,15 @@ class GamePageTests(TestCase):
 		self.assertContains(response, f'href="{reverse("game")}"')
 
 
+class QrCodePageTests(TestCase):
+	def test_qr_code_page_is_public_and_linked_in_nav(self):
+		response = self.client.get(reverse('qr_code'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'QR_Code')
+		self.assertContains(response, f'href="{reverse("qr_code")}"')
+
+
 class CreateMainAdminCommandTests(TestCase):
 	@patch(
 		'core.management.commands.create_main_admin.getpass.getpass',

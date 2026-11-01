@@ -236,6 +236,10 @@ def game(request):
     return render(request, 'core/game.html')
 
 
+def qr_code(request):
+    return render(request, 'core/qr_code.html')
+
+
 def donations(request):
     return render(request, 'core/donations.html', {
         'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY,

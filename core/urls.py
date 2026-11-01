@@ -12,6 +12,7 @@ urlpatterns = [
     path('events/comment/', views.add_comment, name='add_comment'),
     path('events/comment/<int:comment_id>/delete/', views.delete_comment, name='delete_comment'),
     path('game/', views.game, name='game'),
+    path('qr-code/', views.qr_code, name='qr_code'),
     path('donations/', views.donations, name='donations'),
     path('donations/create-checkout-session/', views.create_checkout_session, name='create_checkout_session'),
     path('donations/success/', views.donation_success, name='donation_success'),

@@ -1,0 +1,16 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}QR Code | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section" style="text-align: center;">
+    <h1>QR Code</h1>
+    <p>Scan this QR code with your phone's camera.</p>
+    <img src="{% static 'QR_Code.png' %}" alt="QR code for Food Rescue Nova Scotia"
+         style="display: block; margin: 1.5rem auto; width: min(100%, 360px); height: auto; image-rendering: pixelated;">
+</div>
+<div class="credits fade-section">
+    Created by Akram Syed
+</div>
+{% endblock %}
