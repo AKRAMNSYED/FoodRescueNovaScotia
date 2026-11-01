@@ -45,12 +45,13 @@
         background: rgba(0, 0, 0, 0.6); padding: 1rem;
     }
     .scroll-dialog {
-        position: relative; width: min(96vw, 880px); aspect-ratio: 715 / 547;
+        position: relative; width: min(96vw, 880px, calc(92vh * 715 / 547)); aspect-ratio: 715 / 547;
         background-size: 100% 100%; background-repeat: no-repeat; image-rendering: pixelated;
+        transform: rotate(-2deg);
     }
     .scroll-text {
-        position: absolute; inset: 11% 12% 15% 12%; overflow-y: auto; text-align: left;
-        color: #4a2c12; font-size: clamp(0.7rem, 1.7vw, 0.92rem); line-height: 1.35;
+        position: absolute; inset: 15% 13% 15% 13%; overflow-y: auto; text-align: left; scrollbar-width: thin;
+        color: #4a2c12; font-size: clamp(0.66rem, 1.45vw, 0.84rem); line-height: 1.3;
     }
     .scroll-text h2 { margin: 0 0 0.4rem; font-size: 1.25em; text-align: center; color: #4a2c12; }
     .scroll-text h3 { margin: 0.7rem 0 0.2rem; font-size: 1.05em; color: #4a2c12; }
@@ -58,10 +59,47 @@
     .scroll-text li { margin-bottom: 0.3rem; }
     .scroll-text hr { border: none; border-top: 2px dashed #a8603a; margin: 0.6rem 0; }
     .scroll-text .scroll-label { text-align: center; font-weight: 700; margin: 0.2rem 0; }
-    .scroll-close { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); min-height: 44px; touch-action: auto; }
-    @media (max-width: 768px) {
-        .scroll-dialog { aspect-ratio: auto; height: min(88vh, 680px); }
-        .scroll-text { inset: 12% 11% 18% 11%; font-size: 0.85rem; }
+    .scroll-text .quest-done { color: #166534; }
+    .scroll-text .quest-locked { color: #7c5a3a; font-style: italic; }
+    .scroll-close { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); min-height: 44px; touch-action: auto; }
+    @media (max-width: 768px) and (orientation: portrait) {
+        .scroll-dialog { width: min(96vw, 880px); aspect-ratio: auto; height: min(88vh, 680px); }
+        .scroll-text { inset: 14% 12% 18% 12%; font-size: 0.85rem; }
+    }
+    .confirm-dialog {
+        max-width: 420px; width: 100%; padding: 1.25rem; background: #fffbe6; color: #5c4b00;
+        border: 3px solid #e6c200; border-radius: 14px; text-align: center; font-weight: 600;
+    }
+    .confirm-dialog h2 { margin: 0 0 0.5rem; font-size: 1.25rem; color: #5c4b00; }
+    .confirm-dialog p { margin: 0 0 1rem; line-height: 1.4; }
+    .confirm-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+    .confirm-actions .game-btn { min-width: 0; touch-action: auto; }
+    .game-pad-move, .game-pad-act { display: contents; }
+    .game-rotate-hint {
+        display: none; margin: 0 0 0.75rem; padding: 0.6rem 0.9rem; background: #fff9c4; color: #5c4b00;
+        border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; font-weight: 600; text-align: left;
+    }
+    @media (max-width: 768px) and (orientation: portrait) {
+        .game-rotate-hint { display: block; }
+    }
+    /* Phone held sideways: bigger game view with touch controls floating over the bottom corners. */
+    @media (orientation: landscape) and (max-height: 520px) {
+        .game-canvas { width: min(100%, calc((100vh - 110px) * 960 / 548)); margin: 0 auto; }
+        .game-playing .game-intro, #game-help { display: none; }
+        #game-root { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+        .game-hud { margin-bottom: 0.4rem; padding: 0.3rem 0.6rem; gap: 0.3rem 0.8rem; }
+        .game-hud-item { font-size: 1rem; }
+        .game-quest { font-size: 0.85rem; line-height: 1.25; }
+        .game-controls { margin-top: 0; }
+        .game-pad-move, .game-pad-act {
+            display: flex; gap: 0.4rem; position: fixed; bottom: 10px; z-index: 900; flex-wrap: wrap;
+        }
+        .game-pad-move { left: 10px; max-width: 250px; }
+        .game-pad-act { right: 10px; max-width: 250px; justify-content: flex-end; }
+        .game-pad-move .game-btn, .game-pad-act .game-btn {
+            min-width: 56px; min-height: 48px; padding: 0.3rem 0.7rem; font-size: 0.9rem; opacity: 0.88;
+        }
+        .game-pad-act .game-btn:disabled { opacity: 0.55; }
     }
 </style>
 
@@ -76,8 +114,8 @@
      data-jim-walk="{% static 'Game/Jim_Walk.png' %}"
      data-sobeys="{% static 'Game/Sobeys.png' %}"
      data-feed="{% static 'Game/Feed_NS.png' %}">
-    <h1>Game</h1>
-    <div style="margin: 1rem 0; padding: 0.9rem 1.1rem; background: #fff9c4; border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; color: #5c4b00; font-weight: 600; text-align: left;">
+    <h1 class="game-intro">Game</h1>
+    <div class="game-intro" style="margin: 1rem 0; padding: 0.9rem 1.1rem; background: #fff9c4; border: 1px solid #f0e68c; border-left: 5px solid #e6c200; border-radius: 8px; color: #5c4b00; font-weight: 600; text-align: left;">
         Work in progress. More game features are coming soon.
     </div>
 
@@ -96,6 +134,7 @@
     </section>
 
     <section id="game-stage" hidden aria-label="Game">
+        <p class="game-rotate-hint">Tip: turn your phone sideways to play in the full-size game view.</p>
         <p id="game-help" style="margin: 0 0 0.75rem;">
             Playing as <strong id="game-name"></strong>. Use the <strong>arrow keys</strong> (or W, A, S and D) to walk, hold <strong>R</strong> with a direction to sprint, <strong>space</strong> to jump, <strong>E</strong> to interact, or use the buttons below.
         </p>
@@ -115,13 +154,19 @@
                 role="img" aria-describedby="game-help"
                 aria-label="A character walking along a road under a blue sky with a sun and drifting clouds"></canvas>
         <div class="game-controls">
-            <button type="button" class="game-btn" id="game-left" aria-label="Hold to walk left">&#9664; Left</button>
-            <button type="button" class="game-btn" id="game-up" aria-label="Hold to walk up">&#9650; Up</button>
-            <button type="button" class="game-btn" id="game-down" aria-label="Hold to walk down">&#9660; Down</button>
-            <button type="button" class="game-btn" id="game-right" aria-label="Hold to walk right">Right &#9654;</button>
-            <button type="button" class="game-btn" id="game-jump" aria-label="Jump">Jump</button>
-            <button type="button" class="game-btn" id="game-sprint" aria-label="Hold to sprint while walking">Sprint (R)</button>
-            <button type="button" class="game-btn" id="game-action" disabled>Interact (E)</button>
+            <div class="game-pad-move">
+                <button type="button" class="game-btn" id="game-left" aria-label="Hold to walk left">&#9664; Left</button>
+                <button type="button" class="game-btn" id="game-up" aria-label="Hold to walk up">&#9650; Up</button>
+                <button type="button" class="game-btn" id="game-down" aria-label="Hold to walk down">&#9660; Down</button>
+                <button type="button" class="game-btn" id="game-right" aria-label="Hold to walk right">Right &#9654;</button>
+            </div>
+            <div class="game-pad-act">
+                <button type="button" class="game-btn" id="game-jump" aria-label="Jump">Jump</button>
+                <button type="button" class="game-btn" id="game-sprint" aria-label="Hold to sprint while walking">Sprint (R)</button>
+                <button type="button" class="game-btn" id="game-action" disabled>Interact (E)</button>
+            </div>
+        </div>
+        <div class="game-controls">
             <button type="button" class="game-btn secondary" id="game-change">Change character</button>
         </div>
     </section>
@@ -145,12 +190,20 @@
                 </ol>
                 <hr>
                 <h3>TO HELP, YOU CAN DO THESE QUESTS:</h3>
-                <p><strong>1. Go to a store, buy food &gt;&gt;&gt; Follow the arrow</strong></p>
-                <p class="scroll-label">&mdash; Description &mdash;</p>
-                <p>Collect 3 cans of food, then bring them to this location: <strong>Feed Nova Scotia</strong></p>
-                <p class="scroll-label">&mdash; Do this to unlock the next quest &mdash;</p>
+                <div id="scroll-quests"></div>
             </div>
             <button type="button" class="game-btn scroll-close" id="scroll-close">Start quest</button>
+        </div>
+    </div>
+
+    <div class="scroll-overlay" id="confirm-overlay" hidden>
+        <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+            <h2 id="confirm-title">Are you sure?</h2>
+            <p id="confirm-text">You have given 2 cans already. Shouldn't you save the last can for yourself?</p>
+            <div class="confirm-actions">
+                <button type="button" class="game-btn" id="confirm-keep">Keep it</button>
+                <button type="button" class="game-btn secondary" id="confirm-give">Give it anyway</button>
+            </div>
         </div>
     </div>
 
@@ -262,6 +315,13 @@
     const scrollClose = document.getElementById('scroll-close');
     const scrollBtn = document.getElementById('game-scroll-btn');
     const scrollText = document.getElementById('scroll-text');
+    const scrollQuests = document.getElementById('scroll-quests');
+    const confirmOverlay = document.getElementById('confirm-overlay');
+    const confirmKeep = document.getElementById('confirm-keep');
+    const confirmGive = document.getElementById('confirm-give');
+    let delivered = 0;
+    let confirmOpen = false;
+    let questStarted = false;
 
     const spawnCloud = (drawX) => {
         clouds.push({
@@ -282,6 +342,10 @@
         money = START_MONEY;
         food = 0;
         points = 0;
+        delivered = 0;
+        questStarted = false;
+        confirmOpen = false;
+        confirmOverlay.hidden = true;
         questStage = 'shop';
         sobeysIntroDone = false;
         bubble = null;
@@ -425,7 +489,16 @@
     };
 
     const deliver = () => {
+        if (food === 1 && delivered === FOOD_GOAL - 1) {
+            openConfirm();
+            return;
+        }
+        giveCan();
+    };
+
+    const giveCan = () => {
         food -= 1;
+        delivered += 1;
         floatText('-1 can', '#b91c1c');
         if (food > 0) {
             say(['Thank you! ' + food + (food === 1 ? ' can' : ' cans') + ' to go.']);
@@ -442,7 +515,7 @@
     };
 
     const actionState = () => {
-        if (scrollOpen) {
+        if (scrollOpen || confirmOpen) {
             return { label: 'Interact (E)', enabled: false };
         }
         if (questStage === 'shop' && nearBuilding(buildings.sobeys) && food < FOOD_GOAL) {
@@ -518,10 +591,52 @@
         }
     };
 
+    const renderScroll = () => {
+        const bought = Math.min(food + delivered, FOOD_GOAL);
+        let html;
+        if (questStage === 'shop') {
+            html = '<p><strong>1. Go to a store, buy food &gt;&gt;&gt; Follow the arrow</strong></p>'
+                + '<p class="scroll-label">&mdash; Description &mdash;</p>'
+                + '<p>Collect 3 cans of food, then bring them to this location: <strong>Feed Nova Scotia</strong></p>'
+                + '<p>Progress: ' + bought + '/' + FOOD_GOAL + ' cans bought.</p>';
+        } else if (questStage === 'deliver') {
+            html = '<p><strong>1. Bring the food to Feed Nova Scotia &gt;&gt;&gt; Follow the arrow</strong></p>'
+                + '<p class="scroll-label">&mdash; Description &mdash;</p>'
+                + '<p>You have ' + food + (food === 1 ? ' can' : ' cans') + ' left to give to <strong>Feed Nova Scotia</strong>.</p>'
+                + '<p>Progress: ' + delivered + '/' + FOOD_GOAL + ' cans delivered.</p>';
+        } else {
+            html = '<p class="quest-done"><strong>&#10003; 1. Go to a store, buy food: COMPLETE (+1 point)</strong></p>'
+                + '<p>You bought 3 cans and delivered them to <strong>Feed Nova Scotia</strong>. Thank you!</p>'
+                + '<p class="scroll-label">&mdash; NEXT QUEST UNLOCKED &mdash;</p>'
+                + '<p class="quest-locked"><strong>2. Coming soon...</strong> A new quest is on its way. Keep an eye on this scroll!</p>';
+        }
+        scrollQuests.innerHTML = html;
+        if (questStage === 'shop' && food === 0 && delivered === 0) {
+            scrollQuests.innerHTML += '<p class="scroll-label">&mdash; Do this to unlock the next quest &mdash;</p>';
+        }
+        scrollClose.textContent = (questStage === 'shop' && food === 0 && delivered === 0 && !questStarted) ? 'Start quest' : 'Close';
+    };
+
+    const openConfirm = () => {
+        confirmOpen = true;
+        Object.keys(held).forEach((side) => { held[side] = false; });
+        keys.clear();
+        confirmOverlay.hidden = false;
+        confirmKeep.focus();
+    };
+
+    const closeConfirm = () => {
+        confirmOpen = false;
+        confirmOverlay.hidden = true;
+        lastTime = performance.now();
+        canvas.focus({ preventScroll: true });
+    };
+
     const openScroll = () => {
         scrollOpen = true;
         Object.keys(held).forEach((side) => { held[side] = false; });
         keys.clear();
+        renderScroll();
         scrollOverlay.hidden = false;
         scrollText.scrollTop = 0;
         scrollClose.focus();
@@ -529,6 +644,7 @@
 
     const closeScroll = () => {
         scrollOpen = false;
+        questStarted = true;
         scrollOverlay.hidden = true;
         lastTime = performance.now();
         canvas.focus({ preventScroll: true });
@@ -792,7 +908,7 @@
         }
         const dt = Math.min((time - lastTime) / 1000, 0.05);
         lastTime = time;
-        if (!scrollOpen) {
+        if (!scrollOpen && !confirmOpen) {
             update(dt);
         }
         draw();
@@ -812,6 +928,8 @@
         keys.clear();
         scrollOpen = false;
         scrollOverlay.hidden = true;
+        confirmOpen = false;
+        confirmOverlay.hidden = true;
         lastActionLabel = '';
         [leftBtn, rightBtn, upBtn, downBtn, sprintBtn].forEach((button) => button.classList.remove('active'));
     };
@@ -828,14 +946,19 @@
             resetWorld();
             selectPanel.hidden = true;
             stage.hidden = false;
+            root.classList.add('game-playing');
             draw();
             start();
             openScroll();
+            if (window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches) {
+                stage.scrollIntoView();
+            }
         });
     });
 
     document.getElementById('game-change').addEventListener('click', () => {
         stop();
+        root.classList.remove('game-playing');
         stage.hidden = true;
         selectPanel.hidden = false;
         const first = selectPanel.querySelector('.game-pick');
@@ -856,6 +979,18 @@
     };
 
     document.addEventListener('keydown', (event) => {
+        if (confirmOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeConfirm();
+            } else if (event.key === 'Tab') {
+                const focusable = [confirmKeep, confirmGive];
+                const index = focusable.indexOf(document.activeElement);
+                event.preventDefault();
+                focusable[event.shiftKey ? (index <= 0 ? 1 : index - 1) : (index + 1) % 2].focus();
+            }
+            return;
+        }
         if (scrollOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -937,6 +1072,14 @@
     });
     scrollBtn.addEventListener('click', openScroll);
     scrollClose.addEventListener('click', closeScroll);
+    confirmKeep.addEventListener('click', () => {
+        closeConfirm();
+        say(['You decided to keep the last can. Come back when you are ready.']);
+    });
+    confirmGive.addEventListener('click', () => {
+        closeConfirm();
+        giveCan();
+    });
 })();
 </script>
 

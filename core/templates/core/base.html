@@ -178,7 +178,8 @@
             color: #475569;
         }
 
-        @media (max-width: 768px) {
+        /* Phones held sideways get the full desktop layout. */
+        @media (max-width: 768px) and (orientation: portrait) {
             body.nav-open {
                 overflow: hidden;
             }
@@ -371,7 +372,7 @@
         const navClose = document.getElementById('nav-close');
         const navLinks = document.getElementById('nav-links');
         const navBackdrop = document.getElementById('nav-backdrop');
-        const mobileQuery = window.matchMedia('(max-width: 768px)');
+        const mobileQuery = window.matchMedia('(max-width: 768px) and (orientation: portrait)');
 
         const setMenu = (open, restoreFocus) => {
             navLinks.classList.toggle('open', open);
