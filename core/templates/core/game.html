@@ -97,7 +97,7 @@
 
     <section id="game-stage" hidden aria-label="Game">
         <p id="game-help" style="margin: 0 0 0.75rem;">
-            Playing as <strong id="game-name"></strong>. Use the <strong>arrow keys</strong> (or W, A, S and D) to walk, <strong>space</strong> to jump, <strong>E</strong> to interact, or use the buttons below.
+            Playing as <strong id="game-name"></strong>. Use the <strong>arrow keys</strong> (or W, A, S and D) to walk, hold <strong>R</strong> with a direction to sprint, <strong>space</strong> to jump, <strong>E</strong> to interact, or use the buttons below.
         </p>
         <div class="game-hud">
             <div class="game-hud-item"><img src="{% static 'Game/Money.png' %}" alt="Money"><span id="hud-money">$15</span></div>
@@ -120,6 +120,7 @@
             <button type="button" class="game-btn" id="game-down" aria-label="Hold to walk down">&#9660; Down</button>
             <button type="button" class="game-btn" id="game-right" aria-label="Hold to walk right">Right &#9654;</button>
             <button type="button" class="game-btn" id="game-jump" aria-label="Jump">Jump</button>
+            <button type="button" class="game-btn" id="game-sprint" aria-label="Hold to sprint while walking">Sprint (R)</button>
             <button type="button" class="game-btn" id="game-action" disabled>Interact (E)</button>
             <button type="button" class="game-btn secondary" id="game-change">Change character</button>
         </div>
@@ -165,6 +166,7 @@
     const rightBtn = document.getElementById('game-right');
     const upBtn = document.getElementById('game-up');
     const downBtn = document.getElementById('game-down');
+    const sprintBtn = document.getElementById('game-sprint');
     const jumpBtn = document.getElementById('game-jump');
 
     const W = canvas.width;
@@ -181,6 +183,7 @@
     const GRAVITY = 1800;
     const CHAR_SCALE = 0.55;
     const SPEED = 240;
+    const SPRINT_MULTIPLIER = 1.9;
     const FRAME_SECONDS = 0.18;
     const CLOUD_PARALLAX = 0.25;
     const SUN_X = W - 160;
@@ -221,7 +224,7 @@
     let jumpH = 0;
     let jumpV = 0;
     let clouds = [];
-    const held = { left: false, right: false, up: false, down: false };
+    const held = { left: false, right: false, up: false, down: false, sprint: false };
     const keys = new Set();
 
     // Quest 1 state. One "step" is STEP pixels of walking.
@@ -543,17 +546,18 @@
         }
         const dir = direction();
         const vdir = verticalDirection();
+        const boost = (held.sprint || keys.has('sprint')) && (dir !== 0 || vdir !== 0) ? SPRINT_MULTIPLIER : 1;
         if (dir !== 0) {
             facing = dir;
-            scrollX += dir * SPEED * dt;
+            scrollX += dir * SPEED * boost * dt;
         }
         if (vdir !== 0) {
-            feetY += vdir * V_SPEED * dt;
+            feetY += vdir * V_SPEED * boost * dt;
         }
         const [minY, maxY] = roadLimits();
         feetY = Math.min(maxY, Math.max(minY, feetY));
         if (dir !== 0 || vdir !== 0) {
-            walkTime += dt;
+            walkTime += dt * boost;
         } else {
             walkTime = 0;
         }
@@ -809,7 +813,7 @@
         scrollOpen = false;
         scrollOverlay.hidden = true;
         lastActionLabel = '';
-        [leftBtn, rightBtn, upBtn, downBtn].forEach((button) => button.classList.remove('active'));
+        [leftBtn, rightBtn, upBtn, downBtn, sprintBtn].forEach((button) => button.classList.remove('active'));
     };
 
     document.querySelectorAll('.game-pick').forEach((button) => {
@@ -846,6 +850,7 @@
             case 'ArrowRight': case 'd': case 'D': return 'right';
             case 'ArrowUp': case 'w': case 'W': return 'up';
             case 'ArrowDown': case 's': case 'S': return 'down';
+            case 'r': case 'R': return 'sprint';
             default: return null;
         }
     };
@@ -924,6 +929,7 @@
     bindHold(rightBtn, 'right');
     bindHold(upBtn, 'up');
     bindHold(downBtn, 'down');
+    bindHold(sprintBtn, 'sprint');
     jumpBtn.addEventListener('click', jump);
     actionBtn.addEventListener('click', () => {
         doAction();
