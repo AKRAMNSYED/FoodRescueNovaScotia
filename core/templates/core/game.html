@@ -107,6 +107,7 @@
      id="game-root"
      data-bg="{% static 'Game/Scrollable_Background.png' %}"
      data-sun="{% static 'Game/Sun.png' %}"
+     data-moon="{% static 'Game/Moon.png' %}"
      data-cloud="{% static 'Game/Cloud.png' %}"
      data-eve-stand="{% static 'Game/Eve_Standing.png' %}"
      data-eve-walk="{% static 'Game/Eve_Walk.png' %}"
@@ -254,9 +255,9 @@
         load(root.dataset.bg), load(root.dataset.sun), load(root.dataset.cloud),
         load(root.dataset.eveStand), load(root.dataset.eveWalk),
         load(root.dataset.jimStand), load(root.dataset.jimWalk),
-        load(root.dataset.sobeys), load(root.dataset.feed),
-    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed]) => ({
-        bg, sun, cloud, road: buildRoadMap(bg),
+        load(root.dataset.sobeys), load(root.dataset.feed), load(root.dataset.moon),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon]) => ({
+        bg, sun, moon, cloud, road: buildRoadMap(bg),
         bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
         sobeys, feed,
         characters: {
@@ -324,9 +325,9 @@
     let delivered = 0;
     let confirmOpen = false;
     let questStarted = false;
-    // It turns to night after one minute of play, fading in over a few seconds.
+    // Night starts one minute after Quest 1 is complete, then fades in.
     const NIGHT_AFTER = 60;
-    const NIGHT_FADE = 4;
+    const NIGHT_FADE = 8;
     let playTime = 0;
     let night = 0;
     let nightAnnounced = false;
@@ -727,7 +728,9 @@
 
     const update = (dt) => {
         updateQuest(dt);
-        playTime += dt;
+        if (questStage === 'done') {
+            playTime += dt;
+        }
         night = Math.min(1, Math.max(0, (playTime - NIGHT_AFTER) / (reduceMotion ? 0.001 : NIGHT_FADE)));
         if (night > 0 && !nightAnnounced) {
             nightAnnounced = true;
@@ -807,25 +810,13 @@
     };
 
     const drawMoon = () => {
-        const cx = SUN_X + assets.sun.width / 2;
-        const cy = SUN_Y + assets.sun.height / 2;
-        const radius = Math.max(assets.sun.width, assets.sun.height) * 0.42;
-        const cell = 6;
+        // Same spot and about the same size as the sun.
+        const size = Math.max(assets.sun.width, assets.sun.height);
+        const scale = size / Math.max(assets.moon.width, assets.moon.height);
+        const w = Math.round(assets.moon.width * scale);
+        const h = Math.round(assets.moon.height * scale);
         ctx.globalAlpha = night;
-        for (let gy = -radius; gy < radius; gy += cell) {
-            for (let gx = -radius; gx < radius; gx += cell) {
-                const mx = gx + cell / 2;
-                const my = gy + cell / 2;
-                if (mx * mx + my * my <= radius * radius) {
-                    ctx.fillStyle = '#f3f0d2';
-                    ctx.fillRect(Math.round(cx + gx), Math.round(cy + gy), cell, cell);
-                }
-            }
-        }
-        ctx.fillStyle = '#cfcaa3';
-        [[-8, -10], [10, 2], [-6, 12], [4, -16]].forEach(([dx, dy]) => {
-            ctx.fillRect(Math.round(cx + dx), Math.round(cy + dy), cell, cell);
-        });
+        ctx.drawImage(assets.moon, Math.round(SUN_X + (assets.sun.width - w) / 2), Math.round(SUN_Y + (assets.sun.height - h) / 2), w, h);
         ctx.globalAlpha = 1;
     };
 
