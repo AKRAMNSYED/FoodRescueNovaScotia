@@ -240,6 +240,10 @@ def qr_code(request):
     return render(request, 'core/qr_code.html')
 
 
+def updates(request):
+    return render(request, 'core/updates.html')
+
+
 def donations(request):
     return render(request, 'core/donations.html', {
         'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY,
