@@ -714,7 +714,7 @@
         banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked: go to AJ Smeltzer'], age: 0 };
         say(['Thank you! Every can helps a neighbour in need.']);
         if (food > 0) {
-            say(['I should keep 1 can. I might need it to get into bingo!']);
+            say(['Tip: you need 1 can to get into bingo.']);
         }
         statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked: follow the arrow to AJ Smeltzer. Keep 1 can to get in.';
         updateHud();
@@ -1658,7 +1658,7 @@
     scrollClose.addEventListener('click', closeScroll);
     confirmKeep.addEventListener('click', () => {
         closeConfirm();
-        say(['You decided to keep the last can. Come back when you are ready.']);
+        say(['Okay, you still have your last can.']);
     });
     confirmGive.addEventListener('click', () => {
         closeConfirm();
