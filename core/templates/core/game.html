@@ -713,9 +713,6 @@
         floatText('+1 point', '#15803d');
         banner = { lines: ['QUEST 1 COMPLETE!  +1 point', 'Quest 2 unlocked: go to AJ Smeltzer'], age: 0 };
         say(['Thank you! Every can helps a neighbour in need.']);
-        if (food > 0) {
-            say(['Tip: you need 1 can to get into bingo.']);
-        }
         statusBox.textContent = 'Quest 1 complete. You earned 1 point. Quest 2 is unlocked: follow the arrow to AJ Smeltzer. Keep 1 can to get in.';
         updateHud();
     };
@@ -1658,7 +1655,6 @@
     scrollClose.addEventListener('click', closeScroll);
     confirmKeep.addEventListener('click', () => {
         closeConfirm();
-        say(['Okay, you still have your last can.']);
     });
     confirmGive.addEventListener('click', () => {
         closeConfirm();
