@@ -612,6 +612,12 @@
 
     const playerX = () => scrollX + W / 2;
 
+    // A wall just past Sobeys blocks the way to AJ Smeltzer until Quest 1 is done.
+    const WALL_HALF = 22;
+    let wallNoticeAt = 0;
+    const wallActive = () => questStage !== 'done';
+    const wallWorldX = () => buildings.sobeys.x + buildings.sobeys.img.width * buildings.sobeys.scale / 2 + 150;
+
     const nearBuilding = (b) => Math.abs(playerX() - b.x) < b.img.width * b.scale * 0.4;
 
     const currentTarget = () => {
@@ -1067,7 +1073,17 @@
         const boost = (held.sprint || keys.has('sprint')) && (dir !== 0 || vdir !== 0) ? SPRINT_MULTIPLIER : 1;
         if (dir !== 0) {
             facing = dir;
-            scrollX += dir * SPEED * boost * dt;
+            const wallX = wallWorldX();
+            const next = scrollX + dir * SPEED * boost * dt;
+            if (wallActive() && playerX() <= wallX && next + W / 2 > wallX - WALL_HALF) {
+                scrollX = wallX - WALL_HALF - W / 2;
+                if (!wallNoticeAt || performance.now() - wallNoticeAt > 2500) {
+                    wallNoticeAt = performance.now();
+                    say(['Finish Quest 1 to unlock this way.']);
+                }
+            } else {
+                scrollX = next;
+            }
         }
         if (vdir !== 0) {
             feetY += vdir * V_SPEED * boost * dt;
@@ -1185,6 +1201,49 @@
             lines.push(line);
         }
         return lines;
+    };
+
+    const drawWall = () => {
+        if (!wallActive()) {
+            return;
+        }
+        const x = wallWorldX() - scrollX;
+        if (x < -120 || x > W + 120) {
+            return;
+        }
+        const top = ROAD_TOP - 70;
+        const bottom = ROAD_BOTTOM + 20;
+        ctx.fillStyle = '#9a3412';
+        ctx.fillRect(x - WALL_HALF, top, WALL_HALF * 2, bottom - top);
+        ctx.strokeStyle = '#431407';
+        ctx.lineWidth = 2;
+        for (let y = top; y < bottom; y += 18) {
+            ctx.beginPath();
+            ctx.moveTo(x - WALL_HALF, y);
+            ctx.lineTo(x + WALL_HALF, y);
+            ctx.stroke();
+            ctx.beginPath();
+            const off = ((y - top) / 18) % 2 ? -8 : 8;
+            ctx.moveTo(x + off, y);
+            ctx.lineTo(x + off, y + 18);
+            ctx.stroke();
+        }
+        ctx.strokeRect(x - WALL_HALF, top, WALL_HALF * 2, bottom - top);
+        const bw = 190;
+        const by = top - 58;
+        ctx.fillStyle = '#fff9c4';
+        ctx.strokeStyle = '#e6c200';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(x - bw / 2, by, bw, 50, 10);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#5c4b00';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Finish Quest 1', x, by + 21);
+        ctx.fillText('to unlock', x, by + 40);
+        ctx.textAlign = 'left';
     };
 
     const drawBuildings = () => {
@@ -1368,6 +1427,7 @@
             }
         }
         drawBuildings();
+        drawWall();
         drawCharacter();
         drawFloaters();
         drawBubble();
