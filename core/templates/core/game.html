@@ -1211,38 +1211,74 @@
         if (x < -120 || x > W + 120) {
             return;
         }
-        const top = ROAD_TOP - 70;
         const bottom = ROAD_BOTTOM + 20;
-        ctx.fillStyle = '#9a3412';
-        ctx.fillRect(x - WALL_HALF, top, WALL_HALF * 2, bottom - top);
+        const top = bottom - 120;
+        const depth = 16;
+        const left = x - WALL_HALF;
+        const right = x + WALL_HALF;
+        // Top face
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left + depth, top - depth);
+        ctx.lineTo(right + depth, top - depth);
+        ctx.lineTo(right, top);
+        ctx.closePath();
+        ctx.fill();
+        // Side face
+        ctx.fillStyle = '#7c2d12';
+        ctx.beginPath();
+        ctx.moveTo(right, top);
+        ctx.lineTo(right + depth, top - depth);
+        ctx.lineTo(right + depth, bottom - depth);
+        ctx.lineTo(right, bottom);
+        ctx.closePath();
+        ctx.fill();
+        // Front face with bricks
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(left, top, WALL_HALF * 2, bottom - top);
         ctx.strokeStyle = '#431407';
         ctx.lineWidth = 2;
-        for (let y = top; y < bottom; y += 18) {
+        for (let y = top; y < bottom; y += 20) {
             ctx.beginPath();
-            ctx.moveTo(x - WALL_HALF, y);
-            ctx.lineTo(x + WALL_HALF, y);
+            ctx.moveTo(left, y);
+            ctx.lineTo(right, y);
             ctx.stroke();
+            const off = ((y - top) / 20) % 2 ? -8 : 8;
             ctx.beginPath();
-            const off = ((y - top) / 18) % 2 ? -8 : 8;
             ctx.moveTo(x + off, y);
-            ctx.lineTo(x + off, y + 18);
+            ctx.lineTo(x + off, Math.min(y + 20, bottom));
             ctx.stroke();
         }
-        ctx.strokeRect(x - WALL_HALF, top, WALL_HALF * 2, bottom - top);
-        const bw = 190;
-        const by = top - 58;
-        ctx.fillStyle = '#fff9c4';
-        ctx.strokeStyle = '#e6c200';
-        ctx.lineWidth = 4;
+        ctx.strokeRect(left, top, WALL_HALF * 2, bottom - top);
         ctx.beginPath();
-        ctx.roundRect(x - bw / 2, by, bw, 50, 10);
+        ctx.moveTo(left, top);
+        ctx.lineTo(left + depth, top - depth);
+        ctx.lineTo(right + depth, top - depth);
+        ctx.lineTo(right + depth, bottom - depth);
+        ctx.lineTo(right, bottom);
+        ctx.moveTo(right, top);
+        ctx.lineTo(right + depth, top - depth);
+        ctx.stroke();
+        // Sign in the same style as the direction signs
+        const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
+        ctx.font = '700 20px ' + family;
+        const text = 'Finish Quest 1 to unlock';
+        const bw = ctx.measureText(text).width + 28;
+        const by = top - depth - 48;
+        const bx = x + depth / 2;
+        ctx.fillStyle = '#0b3d2e';
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(bx - bw / 2, by, bw, 38, 12);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#5c4b00';
-        ctx.font = 'bold 16px sans-serif';
+        ctx.fillStyle = '#facc15';
         ctx.textAlign = 'center';
-        ctx.fillText('Finish Quest 1', x, by + 21);
-        ctx.fillText('to unlock', x, by + 40);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, bx, by + 20);
+        ctx.textBaseline = 'alphabetic';
         ctx.textAlign = 'left';
     };
 
