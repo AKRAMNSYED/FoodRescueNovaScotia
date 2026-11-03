@@ -15,6 +15,16 @@
     }
     .game-pick:hover { background: #d6f0e8; }
     .game-pick img { height: 150px; width: auto; image-rendering: pixelated; }
+    .custom-panel { margin-top: 2rem; padding: 1.25rem; background: #eaf7f3; border-left: 5px solid #2f9e7d; border-radius: 8px; }
+    .custom-panel h2 { margin-top: 0; font-size: 1.3rem; }
+    .custom-layout { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; justify-content: center; }
+    #custom-preview { width: min(100%, 320px); height: auto; background: #4fc3f7; border: 2px solid #0b3d2e; border-radius: 12px; image-rendering: pixelated; }
+    .custom-form { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 0.75rem 1.25rem; text-align: left; flex: 1 1 320px; max-width: 480px; }
+    .custom-form label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 600; color: #0b3d2e; }
+    .custom-form input[type="color"] { width: 100%; height: 40px; padding: 2px; cursor: pointer; }
+    .custom-form select { min-height: 40px; font: inherit; }
+    .custom-form .custom-check { flex-direction: row; align-items: center; gap: 0.5rem; }
+    .custom-form .game-btn { grid-column: 1 / -1; }
     .game-canvas {
         display: block; width: 100%; height: auto; border-radius: 12px; background: #4fc3f7;
         image-rendering: pixelated; border: 2px solid #0b3d2e; box-sizing: border-box;
@@ -155,6 +165,8 @@
      data-eve-walk="{% static 'Game/Eve_Walk.png' %}"
      data-jim-stand="{% static 'Game/Jim_Standing.png' %}"
      data-jim-walk="{% static 'Game/Jim_Walk.png' %}"
+     data-hat-stand="{% static 'Game/Hat_Standing.png' %}"
+     data-hat-walk="{% static 'Game/Hat_Walk.png' %}"
      data-sobeys="{% static 'Game/Sobeys.png' %}"
      data-feed="{% static 'Game/Feed_NS.png' %}">
     <h1 class="game-intro">Game</h1>
@@ -173,6 +185,35 @@
                 <img src="{% static 'Game/Jim_Standing.png' %}" alt="">
                 <span>Jim</span>
             </button>
+        </div>
+
+        <div class="custom-panel">
+            <h2 id="custom-title">Create your own character</h2>
+            <div class="custom-layout">
+                <canvas id="custom-preview" width="320" height="300" role="img" aria-label="Preview of your character standing and walking"></canvas>
+                <form id="custom-form" class="custom-form" aria-labelledby="custom-title">
+                    <label>Hair
+                        <select id="custom-hair">
+                            <option value="long">Long hair</option>
+                            <option value="short">Short hair</option>
+                        </select>
+                    </label>
+                    <label>Hair color <input type="color" id="custom-haircolor" value="#ffeb3b"></label>
+                    <label>Skin color <input type="color" id="custom-skin" value="#ffecb3"></label>
+                    <label>Clothes color <input type="color" id="custom-shirt" value="#8bc34a"></label>
+                    <label>Pants color <input type="color" id="custom-pants" value="#0288d1"></label>
+                    <label>Shoes color <input type="color" id="custom-shoes" value="#f44336"></label>
+                    <label>Shoulder width
+                        <select id="custom-shoulders">
+                            <option value="0">Normal</option>
+                            <option value="1">+1 pixel</option>
+                            <option value="2">+2 pixels</option>
+                        </select>
+                    </label>
+                    <label class="custom-check"><input type="checkbox" id="custom-hat"> Wear Jim's hat</label>
+                    <button type="button" class="game-btn" id="custom-play">Play as my character</button>
+                </form>
+            </div>
         </div>
     </section>
 
@@ -252,7 +293,6 @@
                 <p class="game-sr-only" id="bingo-live" aria-live="assertive"></p>
                 <div class="confirm-actions">
                     <button type="button" class="game-btn" id="bingo-win" hidden>Take the soccer ball</button>
-                    <button type="button" class="game-btn secondary" id="bingo-leave">Leave bingo</button>
                 </div>
             </div>
             <div class="bingo-board" id="bingo-board">
@@ -332,8 +372,10 @@
         load(root.dataset.jimStand), load(root.dataset.jimWalk),
         load(root.dataset.sobeys), load(root.dataset.feed), load(root.dataset.moon),
         load(root.dataset.aj), load(root.dataset.trading), load(root.dataset.counter),
-    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter]) => ({
+        load(root.dataset.hatStand), load(root.dataset.hatWalk),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter, hatStand, hatWalk]) => ({
         bg, sun, moon, cloud, road: buildRoadMap(bg), counter,
+        hats: { stand: hatStand, walk: hatWalk },
         bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
         sobeys, feed, aj, trading,
         characters: {
@@ -416,7 +458,6 @@
     const bingoMsg = document.getElementById('bingo-msg');
     const bingoLive = document.getElementById('bingo-live');
     const bingoWin = document.getElementById('bingo-win');
-    const bingoLeave = document.getElementById('bingo-leave');
     const hudTitle = document.getElementById('hud-quest-title');
     const hudText = document.getElementById('hud-quest-text');
     const hudArrow = document.getElementById('hud-quest-arrow');
@@ -883,7 +924,7 @@
         clearInterval(bingoTimer);
         bingoTimer = setInterval(tickBingo, 200);
         tickBingo();
-        bingoLeave.focus();
+        bingoGrid.querySelector('button').focus();
     };
 
     const closeBingo = (silent) => {
@@ -1501,6 +1542,254 @@
         [leftBtn, rightBtn, upBtn, downBtn, sprintBtn].forEach((button) => button.classList.remove('active'));
     };
 
+    const PIXEL = 8.6; // size of one sprite "pixel" in the source art
+    const SHORT_HAIR_CUT = 0.17;
+    const HAT_OVERLAP = 10;
+    const REGION_REF = {
+        hair: [255, 235, 59], skin: [255, 236, 179], shirt: [139, 195, 74], pants: [2, 136, 209], shoes: [244, 67, 54],
+    };
+    const hexToRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const lum = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+    const regionOf = (r, g, b) => {
+        if (r > 235 && g > 170 && b < 135) { return 'hair'; }
+        if (r > 235 && g > 195 && g < 246 && b >= 140 && b < 200) { return 'skin'; }
+        if (g > r + 25 && g > b + 40 && r < 170) { return 'shirt'; }
+        if (b > r + 100 && b > g + 30) { return 'pants'; }
+        if (r > 150 && g < 100 && b < 100) { return 'shoes'; }
+        return '';
+    };
+    // Keeps the original shading: darker pixels stay darker, lighter pixels stay lighter.
+    const tint = (target, ref, r, g, b) => {
+        const ratio = lum(r, g, b) / lum(ref[0], ref[1], ref[2]);
+        return target.map((t) => Math.max(0, Math.min(255, ratio <= 1 ? t * ratio : t + (255 - t) * Math.min(1, ratio - 1))));
+    };
+
+    const normalised = (r, g, b) => {
+        const m = Math.max(r, g, b) || 1;
+        return [(r * 255) / m, (g * 255) / m, (b * 255) / m];
+    };
+    const REGION_DIR = {};
+    Object.keys(REGION_REF).forEach((key) => { REGION_DIR[key] = normalised(...REGION_REF[key]); });
+    // Anti-aliased edge pixels do not match exactly; give them to the body part with the closest hue.
+    const nearestRegion = (r, g, b, lowDown) => {
+        if (lum(r, g, b) < 40 || (r > 100 && r < 165 && g > 35 && g < 95 && b < 65)) { return ''; }
+        const dir = normalised(r, g, b);
+        let best = '';
+        let bestDist = 45;
+        Object.keys(REGION_DIR).forEach((key) => {
+            if (key === 'shoes' && !lowDown) { return; }
+            const ref = REGION_DIR[key];
+            const dist = Math.hypot(dir[0] - ref[0], dir[1] - ref[1], dir[2] - ref[2]);
+            if (dist < bestDist) {
+                best = key;
+                bestDist = dist;
+            }
+        });
+        return best;
+    };
+    // Tells the yellow belt buckle apart from yellow hair by looking for the brown belt beside it.
+    const isBuckle = (d, w, x, y) => {
+        const brownAt = (px) => {
+            if (px < 0 || px >= w) { return false; }
+            const i = (y * w + px) * 4;
+            return d[i + 3] > 0 && d[i] > 100 && d[i] < 165 && d[i + 1] > 35 && d[i + 1] < 95 && d[i + 2] < 65;
+        };
+        let left = false;
+        let right = false;
+        for (let k = 1; k <= 28; k++) {
+            left = left || brownAt(x - k);
+            right = right || brownAt(x + k);
+        }
+        return left && right;
+    };
+
+    const buildCustomSprite = (img, hat, opts) => {
+        const w = img.width;
+        const h = img.height;
+        const src = document.createElement('canvas');
+        src.width = w;
+        src.height = h;
+        const sctx = src.getContext('2d');
+        sctx.drawImage(img, 0, 0);
+        const data = sctx.getImageData(0, 0, w, h);
+        const d = data.data;
+        let topY = h;
+        let shirtTop = h;
+        let pantsTop = h;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                if (d[i + 3] === 0) { continue; }
+                topY = Math.min(topY, y);
+                const region = regionOf(d[i], d[i + 1], d[i + 2]);
+                if (region === 'shirt') { shirtTop = Math.min(shirtTop, y); }
+                if (region === 'pants') { pantsTop = Math.min(pantsTop, y); }
+            }
+        }
+        const hairLimit = topY + h * 0.45;
+        const cutY = topY + h * SHORT_HAIR_CUT;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                if (d[i + 3] === 0) { continue; }
+                const region = regionOf(d[i], d[i + 1], d[i + 2]) || nearestRegion(d[i], d[i + 1], d[i + 2], y > h * 0.8);
+                if (!region) { continue; }
+                if (region === 'hair' && y > hairLimit && isBuckle(d, w, x, y)) { continue; }
+                if (region === 'hair' && opts.hairStyle === 'short' && y > cutY) {
+                    d[i + 3] = 0;
+                    continue;
+                }
+                const target = hexToRgb(opts[region]);
+                const [r, g, b] = tint(target, REGION_REF[region], d[i], d[i + 1], d[i + 2]);
+                d[i] = r;
+                d[i + 1] = g;
+                d[i + 2] = b;
+            }
+        }
+        const e = Math.round(opts.shoulders * PIXEL);
+        const ow = w + 2 * e;
+        const out = new ImageData(ow, h);
+        const o = out.data;
+        for (let y = 0; y < h; y++) {
+            let a = w;
+            let z = -1;
+            for (let x = 0; x < w; x++) {
+                if (d[(y * w + x) * 4 + 3] > 0) {
+                    a = Math.min(a, x);
+                    z = Math.max(z, x);
+                }
+            }
+            if (z < 0) { continue; }
+            const widen = e > 0 && y >= shirtTop && y < pantsTop;
+            if (!widen) {
+                for (let x = a; x <= z; x++) {
+                    const s = (y * w + x) * 4;
+                    const t = (y * ow + x + e) * 4;
+                    o[t] = d[s]; o[t + 1] = d[s + 1]; o[t + 2] = d[s + 2]; o[t + 3] = d[s + 3];
+                }
+                continue;
+            }
+            const span = z - a + 1;
+            for (let x = a - e; x <= z + e; x++) {
+                const sx = Math.min(z, a + Math.floor(((x - (a - e)) * span) / (span + 2 * e)));
+                const s = (y * w + sx) * 4;
+                const t = (y * ow + x + e) * 4;
+                o[t] = d[s]; o[t + 1] = d[s + 1]; o[t + 2] = d[s + 2]; o[t + 3] = d[s + 3];
+            }
+        }
+        let headSum = 0;
+        let headCount = 0;
+        for (let y = topY; y < Math.min(h, topY + 10); y++) {
+            for (let x = 0; x < ow; x++) {
+                if (o[(y * ow + x) * 4 + 3] > 0) {
+                    headSum += x;
+                    headCount += 1;
+                }
+            }
+        }
+        const headCx = headCount ? headSum / headCount : ow / 2;
+        const hatExtra = opts.hat ? Math.max(0, hat.height - HAT_OVERLAP - topY) : 0;
+        const result = document.createElement('canvas');
+        result.width = ow;
+        result.height = h + hatExtra;
+        const rctx = result.getContext('2d');
+        rctx.putImageData(out, 0, hatExtra);
+        if (opts.hat) {
+            rctx.drawImage(hat, Math.round(headCx - hat.width / 2), hatExtra + topY + HAT_OVERLAP - hat.height);
+        }
+        return result;
+    };
+
+    const CUSTOM_KEY = 'frns-custom-character';
+    const customEls = {
+        hair: document.getElementById('custom-hair'),
+        hairColor: document.getElementById('custom-haircolor'),
+        skin: document.getElementById('custom-skin'),
+        shirt: document.getElementById('custom-shirt'),
+        pants: document.getElementById('custom-pants'),
+        shoes: document.getElementById('custom-shoes'),
+        shoulders: document.getElementById('custom-shoulders'),
+        hat: document.getElementById('custom-hat'),
+    };
+    const customPreview = document.getElementById('custom-preview');
+
+    const makeCustomCharacter = () => {
+        const opts = {
+            hair: customEls.hairColor.value,
+            hairStyle: customEls.hair.value,
+            skin: customEls.skin.value,
+            shirt: customEls.shirt.value,
+            pants: customEls.pants.value,
+            shoes: customEls.shoes.value,
+            shoulders: Number(customEls.shoulders.value),
+            hat: customEls.hat.checked,
+        };
+        return {
+            name: 'your custom character',
+            stand: buildCustomSprite(assets.characters.eve.stand, assets.hats.stand, opts),
+            walk: buildCustomSprite(assets.characters.eve.walk, assets.hats.walk, opts),
+        };
+    };
+
+    const drawCustomPreview = () => {
+        if (!assets) { return; }
+        const character = makeCustomCharacter();
+        const c = customPreview.getContext('2d');
+        c.clearRect(0, 0, customPreview.width, customPreview.height);
+        c.imageSmoothingEnabled = false;
+        const half = customPreview.width / 2;
+        [character.stand, character.walk].forEach((sprite, index) => {
+            const scale = Math.min((customPreview.height - 16) / sprite.height, (half - 8) / sprite.width);
+            const pw = sprite.width * scale;
+            const ph = sprite.height * scale;
+            c.drawImage(sprite, index * half + (half - pw) / 2, customPreview.height - ph - 8, pw, ph);
+        });
+    };
+
+    const saveCustomOptions = () => {
+        try {
+            localStorage.setItem(CUSTOM_KEY, JSON.stringify({
+                hair: customEls.hair.value, hairColor: customEls.hairColor.value, skin: customEls.skin.value,
+                shirt: customEls.shirt.value, pants: customEls.pants.value, shoes: customEls.shoes.value,
+                shoulders: customEls.shoulders.value, hat: customEls.hat.checked,
+            }));
+        } catch (error) { /* storage unavailable */ }
+    };
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(CUSTOM_KEY) || 'null');
+        if (saved) {
+            Object.keys(customEls).forEach((key) => {
+                if (saved[key] === undefined) { return; }
+                if (key === 'hat') { customEls.hat.checked = Boolean(saved.hat); } else { customEls[key].value = saved[key]; }
+            });
+        }
+    } catch (error) { /* ignore bad saved data */ }
+
+    document.getElementById('custom-form').addEventListener('input', () => {
+        saveCustomOptions();
+        drawCustomPreview();
+    });
+    assetsPromise.then((loaded) => {
+        assets = assets || loaded;
+        drawCustomPreview();
+    }).catch(() => {});
+
+    const startGame = (chosen) => {
+        character = chosen;
+        document.getElementById('game-name').textContent = character.name;
+        resetWorld();
+        selectPanel.hidden = true;
+        stage.hidden = false;
+        root.classList.add('game-playing');
+        draw();
+        start();
+        openScroll();
+        if (window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches) {
+            stage.scrollIntoView();
+        }
+    };
+
     document.querySelectorAll('.game-pick').forEach((button) => {
         button.addEventListener('click', async () => {
             try {
@@ -1508,19 +1797,18 @@
             } catch (error) {
                 return;
             }
-            character = assets.characters[button.dataset.character];
-            document.getElementById('game-name').textContent = character.name;
-            resetWorld();
-            selectPanel.hidden = true;
-            stage.hidden = false;
-            root.classList.add('game-playing');
-            draw();
-            start();
-            openScroll();
-            if (window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches) {
-                stage.scrollIntoView();
-            }
+            startGame(assets.characters[button.dataset.character]);
         });
+    });
+
+    document.getElementById('custom-play').addEventListener('click', async () => {
+        try {
+            assets = await assetsPromise;
+        } catch (error) {
+            return;
+        }
+        saveCustomOptions();
+        startGame(makeCustomCharacter());
     });
 
     document.getElementById('game-change').addEventListener('click', () => {
@@ -1549,9 +1837,8 @@
         if (bingoOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                closeBingo();
             } else if (event.key === 'Tab') {
-                const focusable = [...bingoGrid.querySelectorAll('button'), bingoWin, bingoLeave].filter((el) => !el.hidden);
+                const focusable = [...bingoGrid.querySelectorAll('button'), bingoWin].filter((el) => !el.hidden);
                 const index = focusable.indexOf(document.activeElement);
                 event.preventDefault();
                 focusable[event.shiftKey ? (index <= 0 ? focusable.length - 1 : index - 1) : (index + 1) % focusable.length].focus();
@@ -1644,7 +1931,6 @@
     bindHold(upBtn, 'up');
     bindHold(downBtn, 'down');
     bindHold(sprintBtn, 'sprint');
-    bingoLeave.addEventListener('click', () => closeBingo());
     bingoWin.addEventListener('click', takeBall);
     jumpBtn.addEventListener('click', jump);
     actionBtn.addEventListener('click', () => {
