@@ -423,6 +423,7 @@
     const BINGO_FIRST = 3;
     const BINGO_GAP = 2.5;
     const BINGO_MAX_CALLS = 12; // the card is always winnable by the 12th number
+    const BINGO_EXTRA_CALLS = 10; // extra calls before a missed card fails
     const BINGO_ROWS = [
         [6, 29, 34, 47, 75],
         [2, 26, 41, 59, 73],
@@ -449,8 +450,10 @@
         for (let n = 1; n <= 75; n++) {
             if (!diagonal.includes(n) && !(rigLoss && BINGO_ROWS.some((row, i) => row[i] === n))) { others.push(n); }
         }
-        const picked = diagonal.concat(shuffle(others).slice(0, BINGO_MAX_CALLS - diagonal.length));
-        return shuffle(picked);
+        const pool = shuffle(others);
+        const need = BINGO_MAX_CALLS - diagonal.length;
+        const early = shuffle(diagonal.concat(pool.slice(0, need)));
+        return early.concat(pool.slice(need, need + BINGO_EXTRA_CALLS));
     };
     let q2Stage = 'enter'; // 'enter' -> 'play' -> 'trade' -> 'done'
     const Q3_GOAL = 5;
