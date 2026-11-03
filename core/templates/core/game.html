@@ -171,6 +171,9 @@
      data-house2="{% static 'Game/House_Variant_2.png' %}"
      data-house3="{% static 'Game/House_Variant_3.png' %}"
      data-house4="{% static 'Game/House_Variant_4.png' %}"
+     data-tree1="{% static 'Game/Tree_Variant_1.png' %}"
+     data-tree2="{% static 'Game/Tree_Variant_2.png' %}"
+     data-tree3="{% static 'Game/Tree_Variant_3.png' %}"
      data-sobeys="{% static 'Game/Sobeys.png' %}"
      data-feed="{% static 'Game/Feed_NS.png' %}">
     <h1 class="game-intro">Game</h1>
@@ -379,8 +382,9 @@
         load(root.dataset.aj), load(root.dataset.trading), load(root.dataset.counter),
         load(root.dataset.hatStand), load(root.dataset.hatWalk),
         load(root.dataset.house1), load(root.dataset.house2), load(root.dataset.house3), load(root.dataset.house4),
-    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter, hatStand, hatWalk, ...houses]) => ({
-        bg, sun, moon, cloud, road: buildRoadMap(bg), counter, houses,
+        load(root.dataset.tree1), load(root.dataset.tree2), load(root.dataset.tree3),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter, hatStand, hatWalk, house1, house2, house3, house4, ...trees]) => ({
+        bg, sun, moon, cloud, road: buildRoadMap(bg), counter, houses: [house1, house2, house3, house4], trees,
         hats: { stand: hatStand, walk: hatWalk },
         bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
         sobeys, feed, aj, trading,
@@ -573,6 +577,7 @@
         buildings.aj = { name: 'AJ Smeltzer', img: assets.aj, scale: 0.7, x: buildings.sobeys.x + AJ_STEPS * STEP };
         buildings.trading = { name: 'Trading Post', img: assets.trading, scale: 0.8, x: buildings.aj.x - TRADING_STEPS * STEP };
         buildHouses();
+        buildTrees();
         updateHud();
         clouds = [];
         for (let i = 0; i < 5; i++) {
@@ -614,6 +619,32 @@
             cx.putImageData(data, 0, 0);
         }
         return c;
+    };
+    // Trees stand on the grass below the road and are drawn over the player, so the player walks behind them.
+    // Variant 3 is 10% of the trees, variants 1 and 2 are 45% each, with 20-100 steps between them.
+    const TREE_HEIGHT = 105;
+    const TREE_BASE_MIN = 528;
+    const TREE_BASE_MAX = 542;
+    let trees = [];
+    const buildTrees = () => {
+        trees = [];
+        let x = buildings.feed.x - 900;
+        const to = buildings.aj.x + 1200;
+        while (x < to) {
+            const roll = Math.random();
+            const img = assets.trees[roll < 0.1 ? 2 : roll < 0.55 ? 0 : 1];
+            const scale = TREE_HEIGHT / img.height;
+            const w = img.width * scale;
+            trees.push({ img, w, h: TREE_HEIGHT, x: x + w / 2, base: TREE_BASE_MIN + Math.random() * (TREE_BASE_MAX - TREE_BASE_MIN) });
+            x += w + (20 + Math.random() * 80) * STEP;
+        }
+    };
+    const drawTrees = () => {
+        trees.forEach((t) => {
+            const left = t.x - scrollX - t.w / 2;
+            if (left > W || left + t.w < 0) { return; }
+            ctx.drawImage(t.img, Math.round(left), Math.round(t.base - t.h), Math.round(t.w), t.h);
+        });
     };
     const buildHouses = () => {
         houses = [];
@@ -1670,7 +1701,7 @@
         drawBuildings();
         drawWall();
         drawCharacter();
-        drawFloaters();
+        drawTrees();
         drawBubble();
         drawTargetIndicator();
         drawBanner();
