@@ -1627,13 +1627,36 @@
                 if (region === 'pants') { pantsTop = Math.min(pantsTop, y); }
             }
         }
+        // The torso is measured below the sleeves (before recolouring), so the sleeves count as part of the arms.
+        const lefts = [];
+        const rights = [];
+        for (let y = Math.round(shirtTop + (pantsTop - shirtTop) * 0.4); y < pantsTop; y++) {
+            let l = -1;
+            let r = -1;
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                if (d[i + 3] > 0 && regionOf(d[i], d[i + 1], d[i + 2]) === 'shirt') {
+                    if (l < 0) { l = x; }
+                    r = x;
+                }
+            }
+            if (l >= 0) { lefts.push(l); rights.push(r); }
+        }
+        const median = (list, fallback) => (list.length ? list.sort((p, q) => p - q)[list.length >> 1] : fallback);
+        const torsoLeft = median(lefts, 0);
+        const torsoRight = median(rights, w - 1);
         const hairLimit = topY + h * 0.45;
         const cutY = topY + h * SHORT_HAIR_CUT;
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
                 const i = (y * w + x) * 4;
                 if (d[i + 3] === 0) { continue; }
-                const region = regionOf(d[i], d[i + 1], d[i + 2]) || nearestRegion(d[i], d[i + 1], d[i + 2], y > h * 0.8);
+                let region = regionOf(d[i], d[i + 1], d[i + 2]);
+                if (!region && Math.min(d[i], d[i + 1], d[i + 2]) > 200) {
+                    d[i + 3] = 0;
+                    continue;
+                }
+                region = region || nearestRegion(d[i], d[i + 1], d[i + 2], y > h * 0.8);
                 if (!region) {
                     // Pale leftover edge pixels would show up as white halos once recoloured.
                     if (lum(d[i], d[i + 1], d[i + 2]) > 150) { d[i + 3] = 0; }
@@ -1710,15 +1733,8 @@
                 continue;
             }
             // Only the arms move outward; the torso (shirt pixels) keeps its width.
-            let ts = -1;
-            let te = -1;
-            for (let x = a; x <= z; x++) {
-                if (regionOf(d[(y * w + x) * 4], d[(y * w + x) * 4 + 1], d[(y * w + x) * 4 + 2]) === 'shirt') {
-                    if (ts < 0) { ts = x; }
-                    te = x;
-                }
-            }
-            if (ts < 0) { ts = a; te = z; }
+            const ts = torsoLeft;
+            const te = torsoRight;
             const put = (sx, tx) => {
                 const s = (y * w + sx) * 4;
                 const t = (y * ow + tx + e) * 4;
