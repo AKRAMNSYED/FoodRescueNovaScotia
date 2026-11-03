@@ -167,6 +167,10 @@
      data-jim-walk="{% static 'Game/Jim_Walk.png' %}"
      data-hat-stand="{% static 'Game/Hat_Standing.png' %}"
      data-hat-walk="{% static 'Game/Hat_Walk.png' %}"
+     data-house1="{% static 'Game/House_Variant_1.png' %}"
+     data-house2="{% static 'Game/House_Variant_2.png' %}"
+     data-house3="{% static 'Game/House_Variant_3.png' %}"
+     data-house4="{% static 'Game/House_Variant_4.png' %}"
      data-sobeys="{% static 'Game/Sobeys.png' %}"
      data-feed="{% static 'Game/Feed_NS.png' %}">
     <h1 class="game-intro">Game</h1>
@@ -374,8 +378,9 @@
         load(root.dataset.sobeys), load(root.dataset.feed), load(root.dataset.moon),
         load(root.dataset.aj), load(root.dataset.trading), load(root.dataset.counter),
         load(root.dataset.hatStand), load(root.dataset.hatWalk),
-    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter, hatStand, hatWalk]) => ({
-        bg, sun, moon, cloud, road: buildRoadMap(bg), counter,
+        load(root.dataset.house1), load(root.dataset.house2), load(root.dataset.house3), load(root.dataset.house4),
+    ]).then(([bg, sun, cloud, eveStand, eveWalk, jimStand, jimWalk, sobeys, feed, moon, aj, trading, counter, hatStand, hatWalk, ...houses]) => ({
+        bg, sun, moon, cloud, road: buildRoadMap(bg), counter, houses,
         hats: { stand: hatStand, walk: hatWalk },
         bgNight: buildNightSky(bg), cloudNight: buildDarkCloud(cloud),
         sobeys, feed, aj, trading,
@@ -535,11 +540,74 @@
         buildings.feed = { name: 'Feed Nova Scotia', img: assets.feed, scale: 0.75, x: W / 2 - FEED_STEPS * STEP };
         buildings.aj = { name: 'AJ Smeltzer', img: assets.aj, scale: 0.7, x: buildings.sobeys.x + AJ_STEPS * STEP };
         buildings.trading = { name: 'Trading Post', img: assets.trading, scale: 0.8, x: buildings.aj.x - TRADING_STEPS * STEP };
+        buildHouses();
         updateHud();
         clouds = [];
         for (let i = 0; i < 5; i++) {
             spawnCloud((W / 5) * i + Math.random() * 120);
         }
+    };
+
+    // Decorative houses fill the empty stretches of road. The white walls get a random colour:
+    // 50% white, 25% brown, 15% gray, 5% black, 5% random.
+    const HOUSE_SCALE = 0.55;
+    const HOUSE_CLEARANCE = 330; // distance kept clear around the important buildings and the wall
+    let houses = [];
+    const pickWallColor = () => {
+        const roll = Math.random() * 100;
+        if (roll < 50) { return [255, 255, 255]; }
+        if (roll < 75) { return [150 + Math.random() * 30, 100 + Math.random() * 25, 60 + Math.random() * 20]; }
+        if (roll < 90) { const g = 120 + Math.random() * 60; return [g, g, g]; }
+        if (roll < 95) { return [35, 35, 35]; }
+        return [Math.random() * 255, Math.random() * 255, Math.random() * 255];
+    };
+    const colourHouse = (img, color) => {
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0);
+        if (color[0] !== 255 || color[1] !== 255 || color[2] !== 255) {
+            const data = cx.getImageData(0, 0, c.width, c.height);
+            const p = data.data;
+            for (let i = 0; i < p.length; i += 4) {
+                if (p[i + 3] === 0) { continue; }
+                // Pure white is the wall; the pale blue-gray is its shaded part.
+                if (p[i] === 255 && p[i + 1] === 255 && p[i + 2] === 255) {
+                    p[i] = color[0]; p[i + 1] = color[1]; p[i + 2] = color[2];
+                } else if (p[i] === 207 && p[i + 1] === 216 && p[i + 2] === 220) {
+                    p[i] = color[0] * 0.82; p[i + 1] = color[1] * 0.82; p[i + 2] = color[2] * 0.82;
+                }
+            }
+            cx.putImageData(data, 0, 0);
+        }
+        return c;
+    };
+    const buildHouses = () => {
+        houses = [];
+        const fixed = Object.values(buildings).map((b) => b.x);
+        fixed.push(wallWorldX(), W / 2);
+        const from = buildings.feed.x - 700;
+        const to = buildings.aj.x + 1000;
+        let x = from;
+        while (x < to) {
+            const img = assets.houses[Math.floor(Math.random() * assets.houses.length)];
+            const halfW = (img.width * HOUSE_SCALE) / 2;
+            const cxPos = x + halfW;
+            if (fixed.every((fx) => Math.abs(fx - cxPos) > HOUSE_CLEARANCE + halfW * 0.3)) {
+                houses.push({ img: colourHouse(img, pickWallColor()), x: cxPos });
+            }
+            x += halfW * 2 + 40 + Math.random() * 260;
+        }
+    };
+    const drawHouses = () => {
+        houses.forEach((hs) => {
+            const w = hs.img.width * HOUSE_SCALE;
+            const h = hs.img.height * HOUSE_SCALE;
+            const x = hs.x - scrollX - w / 2;
+            if (x > W || x + w < 0) { return; }
+            ctx.drawImage(hs.img, Math.round(x), Math.round(BUILDING_BASE - h), Math.round(w), Math.round(h));
+        });
     };
 
     const direction = () => {
@@ -1322,6 +1390,7 @@
     };
 
     const drawBuildings = () => {
+        drawHouses();
         Object.values(buildings).forEach((b) => {
             const w = b.img.width * b.scale;
             const h = b.img.height * b.scale;
