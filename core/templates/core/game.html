@@ -211,6 +211,7 @@
                         </select>
                     </label>
                     <label class="custom-check"><input type="checkbox" id="custom-hat"> Wear Jim's hat</label>
+                    <label>Hat color <input type="color" id="custom-hatcolor" value="#689f38"></label>
                     <button type="button" class="game-btn" id="custom-play">Play as my character</button>
                 </form>
             </div>
@@ -1633,7 +1634,11 @@
                 const i = (y * w + x) * 4;
                 if (d[i + 3] === 0) { continue; }
                 const region = regionOf(d[i], d[i + 1], d[i + 2]) || nearestRegion(d[i], d[i + 1], d[i + 2], y > h * 0.8);
-                if (!region) { continue; }
+                if (!region) {
+                    // Pale leftover edge pixels would show up as white halos once recoloured.
+                    if (lum(d[i], d[i + 1], d[i + 2]) > 150) { d[i + 3] = 0; }
+                    continue;
+                }
                 if (region === 'hair' && y > hairLimit && isBuckle(d, w, x, y)) { continue; }
                 if (region === 'hair' && opts.hairStyle === 'short' && y > cutY) {
                     d[i + 3] = 0;
@@ -1645,6 +1650,41 @@
                 d[i + 1] = g;
                 d[i + 2] = b;
             }
+        }
+        // Crisp edges, then drop any stray specks that are not part of the main body.
+        for (let i = 0; i < d.length; i += 4) { d[i + 3] = d[i + 3] < 128 ? 0 : 255; }
+        const label = new Int32Array(w * h);
+        let bestLabel = 0;
+        let bestSize = 0;
+        let nextLabel = 0;
+        for (let start = 0; start < w * h; start++) {
+            if (d[start * 4 + 3] === 0 || label[start]) { continue; }
+            nextLabel += 1;
+            const stack = [start];
+            label[start] = nextLabel;
+            let size = 0;
+            while (stack.length) {
+                const p = stack.pop();
+                size += 1;
+                const px = p % w;
+                const py = (p - px) / w;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const nx = px + dx;
+                        const ny = py + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) { continue; }
+                        const q = ny * w + nx;
+                        if (d[q * 4 + 3] !== 0 && !label[q]) {
+                            label[q] = nextLabel;
+                            stack.push(q);
+                        }
+                    }
+                }
+            }
+            if (size > bestSize) { bestSize = size; bestLabel = nextLabel; }
+        }
+        for (let p = 0; p < w * h; p++) {
+            if (d[p * 4 + 3] !== 0 && label[p] !== bestLabel) { d[p * 4 + 3] = 0; }
         }
         const e = Math.round(opts.shoulders * PIXEL);
         const ow = w + 2 * e;
@@ -1669,25 +1709,42 @@
                 }
                 continue;
             }
-            const span = z - a + 1;
-            for (let x = a - e; x <= z + e; x++) {
-                const sx = Math.min(z, a + Math.floor(((x - (a - e)) * span) / (span + 2 * e)));
-                const s = (y * w + sx) * 4;
-                const t = (y * ow + x + e) * 4;
-                o[t] = d[s]; o[t + 1] = d[s + 1]; o[t + 2] = d[s + 2]; o[t + 3] = d[s + 3];
+            // Only the arms move outward; the torso (shirt pixels) keeps its width.
+            let ts = -1;
+            let te = -1;
+            for (let x = a; x <= z; x++) {
+                if (regionOf(d[(y * w + x) * 4], d[(y * w + x) * 4 + 1], d[(y * w + x) * 4 + 2]) === 'shirt') {
+                    if (ts < 0) { ts = x; }
+                    te = x;
+                }
             }
+            if (ts < 0) { ts = a; te = z; }
+            const put = (sx, tx) => {
+                const s = (y * w + sx) * 4;
+                const t = (y * ow + tx + e) * 4;
+                o[t] = d[s]; o[t + 1] = d[s + 1]; o[t + 2] = d[s + 2]; o[t + 3] = d[s + 3];
+            };
+            for (let x = a; x < ts; x++) { put(x, x - e); }
+            for (let x = ts; x <= te; x++) { put(x, x); }
+            for (let x = te + 1; x <= z; x++) { put(x, x + e); }
+            // Fill the gap beside the torso with the arm colour so the arms stay attached.
+            const fill = (from, to, step, sx) => {
+                for (let x = from; x !== to; x += step) { put(sx, x); }
+            };
+            if (ts > a) { fill(ts - e, ts, 1, ts - 1); }
+            if (te < z) { fill(te + 1, te + 1 + e, 1, te + 1); }
         }
-        let headSum = 0;
-        let headCount = 0;
-        for (let y = topY; y < Math.min(h, topY + 10); y++) {
+        let headMin = ow;
+        let headMax = -1;
+        for (let y = topY + 12; y < Math.min(h, topY + h * 0.12); y++) {
             for (let x = 0; x < ow; x++) {
                 if (o[(y * ow + x) * 4 + 3] > 0) {
-                    headSum += x;
-                    headCount += 1;
+                    headMin = Math.min(headMin, x);
+                    headMax = Math.max(headMax, x);
                 }
             }
         }
-        const headCx = headCount ? headSum / headCount : ow / 2;
+        const headCx = headMax >= 0 ? (headMin + headMax) / 2 : ow / 2;
         const hatExtra = opts.hat ? Math.max(0, hat.height - HAT_OVERLAP - topY) : 0;
         const result = document.createElement('canvas');
         result.width = ow;
@@ -1695,9 +1752,27 @@
         const rctx = result.getContext('2d');
         rctx.putImageData(out, 0, hatExtra);
         if (opts.hat) {
-            rctx.drawImage(hat, Math.round(headCx - hat.width / 2), hatExtra + topY + HAT_OVERLAP - hat.height);
+            rctx.drawImage(tintHat(hat, opts.hatColor), Math.round(headCx - hat.width / 2), hatExtra + topY + HAT_OVERLAP - hat.height);
         }
         return result;
+    };
+
+    const tintHat = (hat, color) => {
+        const c = document.createElement('canvas');
+        c.width = hat.width;
+        c.height = hat.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(hat, 0, 0);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        const p = img.data;
+        const target = hexToRgb(color);
+        for (let i = 0; i < p.length; i += 4) {
+            if (p[i + 3] === 0 || lum(p[i], p[i + 1], p[i + 2]) < 40) { continue; }
+            const [r, g, b] = tint(target, [104, 159, 56], p[i], p[i + 1], p[i + 2]);
+            p[i] = r; p[i + 1] = g; p[i + 2] = b;
+        }
+        ctx.putImageData(img, 0, 0);
+        return c;
     };
 
     const CUSTOM_KEY = 'frns-custom-character';
@@ -1710,6 +1785,7 @@
         shoes: document.getElementById('custom-shoes'),
         shoulders: document.getElementById('custom-shoulders'),
         hat: document.getElementById('custom-hat'),
+        hatColor: document.getElementById('custom-hatcolor'),
     };
     const customPreview = document.getElementById('custom-preview');
 
@@ -1723,6 +1799,7 @@
             shoes: customEls.shoes.value,
             shoulders: Number(customEls.shoulders.value),
             hat: customEls.hat.checked,
+            hatColor: customEls.hatColor.value,
         };
         return {
             name: 'your custom character',
@@ -1751,7 +1828,7 @@
             localStorage.setItem(CUSTOM_KEY, JSON.stringify({
                 hair: customEls.hair.value, hairColor: customEls.hairColor.value, skin: customEls.skin.value,
                 shirt: customEls.shirt.value, pants: customEls.pants.value, shoes: customEls.shoes.value,
-                shoulders: customEls.shoulders.value, hat: customEls.hat.checked,
+                shoulders: customEls.shoulders.value, hat: customEls.hat.checked, hatColor: customEls.hatColor.value,
             }));
         } catch (error) { /* storage unavailable */ }
     };
