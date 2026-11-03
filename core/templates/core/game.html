@@ -420,9 +420,9 @@
     let points = 0;
     const AJ_STEPS = 200; // right of Sobeys
     const TRADING_STEPS = 100; // left of AJ Smeltzer
-    const BINGO_CALLS = [6, 71, 46, 26];
-    const BINGO_FIRST = 5;
-    const BINGO_GAP = 15;
+    const BINGO_FIRST = 3;
+    const BINGO_GAP = 2.5;
+    const BINGO_MAX_CALLS = 12; // the card is always winnable by the 12th number
     const BINGO_ROWS = [
         [6, 29, 34, 47, 75],
         [2, 26, 41, 59, 73],
@@ -430,8 +430,31 @@
         [11, 27, 31, 46, 68],
         [15, 21, 37, 48, 71],
     ];
-    const BINGO_LETTERS = { 6: 'B', 71: 'O', 46: 'G', 26: 'I' };
+    let bingoCalls = [];
+    const bingoLetter = (n) => 'BINGO'[Math.min(4, Math.floor((n - 1) / 15))];
+    const shuffle = (list) => {
+        for (let i = list.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [list[i], list[j]] = [list[j], list[i]];
+        }
+        return list;
+    };
+    // Random order, but every diagonal number is guaranteed to come up within the first 12 calls.
+    const rollBingoCalls = () => {
+        const diagonal = BINGO_ROWS.map((row, i) => row[i]).filter((v) => v !== 'FREE');
+        const others = [];
+        for (let n = 1; n <= 75; n++) {
+            if (!diagonal.includes(n)) { others.push(n); }
+        }
+        const picked = diagonal.concat(shuffle(others).slice(0, BINGO_MAX_CALLS - diagonal.length));
+        return shuffle(picked);
+    };
     let q2Stage = 'enter'; // 'enter' -> 'play' -> 'trade' -> 'done'
+    const Q3_GOAL = 5;
+    let q3Stage = 'locked'; // 'locked' -> 'shop' -> 'deliver' -> 'done'
+    let q3Bought = 0;
+    let q3Given = 0;
+    const q3Active = () => q3Stage === 'shop' || q3Stage === 'deliver';
     let hasBall = false;
     let helpUsed = false;
     let ajIntroDone = false;
@@ -527,6 +550,9 @@
         confirmOverlay.hidden = true;
         questStage = 'shop';
         q2Stage = 'enter';
+        q3Stage = 'locked';
+        q3Bought = 0;
+        q3Given = 0;
         hasBall = false;
         helpUsed = false;
         ajIntroDone = false;
@@ -740,12 +766,18 @@
         if (q2Stage === 'enter' || q2Stage === 'play') {
             return buildings.aj;
         }
-        return q2Stage === 'trade' ? buildings.trading : null;
+        if (q2Stage === 'trade') {
+            return buildings.trading;
+        }
+        if (q3Stage === 'shop') {
+            return buildings.sobeys;
+        }
+        return q3Stage === 'deliver' ? buildings.feed : null;
     };
 
     const updateHud = () => {
         hudMoney.textContent = '$' + money;
-        hudFood.textContent = food + '/' + FOOD_GOAL;
+        hudFood.textContent = food + '/' + (q3Active() ? Q3_GOAL : FOOD_GOAL);
         hudPoints.textContent = points + (points === 1 ? ' point' : ' points');
         if (questStage === 'shop') {
             hudTitle.textContent = 'Quest 1: Go to a store and buy food';
@@ -762,8 +794,16 @@
         } else if (q2Stage === 'trade') {
             hudTitle.textContent = 'Quest 2: Trade the soccer ball';
             hudText.textContent = 'Take the soccer ball to the Trading Post and exchange it for $25.';
+        } else if (q3Stage === 'shop') {
+            hudTitle.textContent = 'Quest 3: Buy food for Feed Nova Scotia';
+            hudText.textContent = 'Buy ' + Q3_GOAL + ' cans at Sobeys with your $' + (Q3_GOAL * FOOD_PRICE) + ' (' + q3Bought + '/' + Q3_GOAL + ' bought), then donate them all.';
+        } else if (q3Stage === 'deliver') {
+            hudTitle.textContent = 'Quest 3: Donate the food';
+            hudText.textContent = 'Give all ' + Q3_GOAL + ' cans to Feed Nova Scotia (' + q3Given + '/' + Q3_GOAL + ' donated).';
+        } else if (q3Stage === 'done') {
+            hudTitle.textContent = 'Quest 3 complete! +1 point';
+            hudText.textContent = 'You donated ' + Q3_GOAL + ' cans to Feed Nova Scotia. More quests are coming soon!';
         } else {
-            hudTitle.textContent = 'Quest 2 complete! +1 point';
             hudText.textContent = 'You traded the soccer ball for $25. More quests are coming soon!';
         }
         hudBallItem.hidden = !hasBall;
@@ -849,7 +889,13 @@
         if (questStage === 'done' && q2Stage === 'trade' && nearBuilding(buildings.trading)) {
             return { id: 'trade', label: 'Trade soccer ball for $25 (E)', enabled: true };
         }
-        if (questStage === 'done' && nearBuilding(buildings.feed) && food > 0) {
+        if (q3Stage === 'shop' && nearBuilding(buildings.sobeys) && q3Bought < Q3_GOAL) {
+            return { id: 'q3buy', label: 'Buy food ($' + FOOD_PRICE + ') (E)', enabled: money >= FOOD_PRICE };
+        }
+        if (q3Stage === 'deliver' && nearBuilding(buildings.feed) && food > 0) {
+            return { id: 'q3give', label: 'Give 1 can to Feed NS (E)', enabled: true };
+        }
+        if (questStage === 'done' && !q3Active() && nearBuilding(buildings.feed) && food > 0) {
             return { id: 'give', label: 'Give last can to Feed NS (E)', enabled: true };
         }
         return { id: '', label: 'Interact (E)', enabled: false };
@@ -864,6 +910,31 @@
             buy();
         } else if (action.id === 'give') {
             deliver();
+        } else if (action.id === 'q3buy') {
+            money -= FOOD_PRICE;
+            food += 1;
+            q3Bought += 1;
+            floatText('-$' + FOOD_PRICE, '#b91c1c');
+            floatText('+1 food', '#15803d');
+            if (q3Bought >= Q3_GOAL) {
+                q3Stage = 'deliver';
+                say(['That is all 5 cans. Off to Feed Nova Scotia!']);
+                statusBox.textContent = 'You bought 5 cans. Follow the arrow to Feed Nova Scotia and donate them all.';
+            }
+            updateHud();
+        } else if (action.id === 'q3give') {
+            food -= 1;
+            q3Given += 1;
+            floatText('-1 can', '#b91c1c');
+            if (q3Given >= Q3_GOAL) {
+                q3Stage = 'done';
+                points += 1;
+                floatText('+1 point', '#15803d');
+                banner = { lines: ['QUEST 3 COMPLETE!  +1 point', 'You donated all 5 cans'], age: 0 };
+                say(['Five cans! Thank you so much!']);
+                statusBox.textContent = 'Quest 3 complete. You donated 5 cans to Feed Nova Scotia and earned 1 point.';
+            }
+            updateHud();
         } else if (action.id === 'enter') {
             food -= 1;
             q2Stage = 'play';
@@ -902,11 +973,12 @@
         money += 25;
         points += 1;
         q2Stage = 'done';
+        q3Stage = 'shop';
         floatText('+$25', '#15803d');
         floatText('+1 point', '#15803d');
-        banner = { lines: ['QUEST 2 COMPLETE!  +1 point', 'The sun is coming back up'], age: 0 };
+        banner = { lines: ['QUEST 2 COMPLETE!  +1 point', 'Quest 3 unlocked: buy 5 cans at Sobeys'], age: 0 };
         say(['A soccer ball for $25. Nice trade!']);
-        statusBox.textContent = 'Quest 2 complete. You traded the soccer ball for $25 and earned 1 point. Morning has come.';
+        statusBox.textContent = 'Quest 2 complete. You traded the soccer ball for $25 and earned 1 point. Morning has come. Quest 3 is unlocked: buy 5 cans at Sobeys with your $25 and donate them all to Feed Nova Scotia.';
         updateHud();
     };
 
@@ -943,7 +1015,7 @@
         if (bingoMarks.has(value)) {
             return;
         }
-        const called = value === 'FREE' || BINGO_CALLS.slice(0, bingoCalled).includes(value);
+        const called = value === 'FREE' || bingoCalls.slice(0, bingoCalled).includes(value);
         if (!called) {
             bingoMsg.textContent = value + ' has not been called.';
             return;
@@ -960,18 +1032,18 @@
 
     const tickBingo = () => {
         const elapsed = (performance.now() - bingoStart) / 1000;
-        const due = elapsed < BINGO_FIRST ? 0 : Math.min(BINGO_CALLS.length, 1 + Math.floor((elapsed - BINGO_FIRST) / BINGO_GAP));
+        const due = elapsed < BINGO_FIRST ? 0 : Math.min(bingoCalls.length, 1 + Math.floor((elapsed - BINGO_FIRST) / BINGO_GAP));
         if (due > bingoCalled) {
             bingoCalled = due;
-            const n = BINGO_CALLS[bingoCalled - 1];
-            bingoCall.textContent = BINGO_LETTERS[n] + ' ' + n;
-            bingoCalledEl.textContent = 'Called: ' + BINGO_CALLS.slice(0, bingoCalled).join(', ');
-            bingoLive.textContent = 'Number called: ' + BINGO_LETTERS[n] + ' ' + n;
+            const n = bingoCalls[bingoCalled - 1];
+            bingoCall.textContent = bingoLetter(n) + ' ' + n;
+            bingoCalledEl.textContent = 'Called: ' + bingoCalls.slice(0, bingoCalled).join(', ');
+            bingoLive.textContent = 'Number called: ' + bingoLetter(n) + ' ' + n;
             bingoMsg.textContent = '';
         }
-        if (bingoTimer && bingoCalled < BINGO_CALLS.length) {
+        if (bingoTimer && bingoCalled < bingoCalls.length) {
             const nextAt = BINGO_FIRST + bingoCalled * BINGO_GAP;
-            bingoTimerEl.textContent = 'Next number in ' + Math.max(0, Math.ceil(nextAt - elapsed)) + 's';
+            bingoTimerEl.textContent = 'Next number in ' + Math.max(0, nextAt - elapsed).toFixed(1) + 's';
         } else if (bingoTimer) {
             bingoTimerEl.textContent = 'All numbers called. Finish your card!';
         }
@@ -982,6 +1054,7 @@
         Object.keys(held).forEach((side) => { held[side] = false; });
         keys.clear();
         bingoCalled = 0;
+        bingoCalls = rollBingoCalls();
         bingoMarks = new Set();
         buildBingoGrid();
         bingoCall.textContent = 'Get ready...';
@@ -1100,12 +1173,24 @@
                 trade: '<p class="quest-locked"><strong>2. Trade the soccer ball &gt;&gt;&gt; Follow the arrow</strong></p>'
                     + '<p>Take the soccer ball to the <strong>Trading Post</strong> (100 steps left of AJ Smeltzer) for $25.</p>',
                 done: '<p class="quest-done"><strong>&#10003; 2. Bingo and trading: COMPLETE (+1 point)</strong></p>'
-                    + '<p>You traded the soccer ball for $25. More quests are coming soon!</p>',
+                    + '<p>You traded the soccer ball for $25.</p>',
             }[q2Stage];
+            const q3Html = {
+                locked: '',
+                shop: '<p class="scroll-label">&mdash; QUEST 3 &mdash;</p>'
+                    + '<p class="quest-locked"><strong>3. Buy 5 cans at Sobeys &gt;&gt;&gt; Follow the arrow</strong></p>'
+                    + '<p>Spend your $25 on 5 cans of food. Progress: ' + q3Bought + '/' + Q3_GOAL + ' bought.</p>',
+                deliver: '<p class="scroll-label">&mdash; QUEST 3 &mdash;</p>'
+                    + '<p class="quest-locked"><strong>3. Donate all 5 cans &gt;&gt;&gt; Follow the arrow</strong></p>'
+                    + '<p>Give every can to <strong>Feed Nova Scotia</strong>. Progress: ' + q3Given + '/' + Q3_GOAL + ' donated.</p>',
+                done: '<p class="scroll-label">&mdash; QUEST 3 &mdash;</p>'
+                    + '<p class="quest-done"><strong>&#10003; 3. Donate 5 cans: COMPLETE (+1 point)</strong></p>'
+                    + '<p>More quests are coming soon!</p>',
+            }[q3Stage];
             html = '<p class="quest-done"><strong>&#10003; 1. Go to a store, buy food: COMPLETE (+1 point)</strong></p>'
                 + '<p>You gave ' + Math.max(delivered, DELIVER_GOAL) + ' cans to <strong>Feed Nova Scotia</strong>. Thank you!</p>'
                 + '<p class="scroll-label">&mdash; ' + (q2Stage === 'done' ? 'QUEST 2' : 'NEXT QUEST UNLOCKED') + ' &mdash;</p>'
-                + q2Html;
+                + q2Html + q3Html;
         }
         scrollQuests.innerHTML = html;
         if (questStage === 'shop' && food === 0 && delivered === 0) {
