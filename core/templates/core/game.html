@@ -572,11 +572,11 @@
             const p = data.data;
             for (let i = 0; i < p.length; i += 4) {
                 if (p[i + 3] === 0) { continue; }
-                // Pure white is the wall; the pale blue-gray is its shaded part.
-                if (p[i] === 255 && p[i + 1] === 255 && p[i + 2] === 255) {
-                    p[i] = color[0]; p[i + 1] = color[1]; p[i + 2] = color[2];
-                } else if (p[i] === 207 && p[i + 1] === 216 && p[i + 2] === 220) {
-                    p[i] = color[0] * 0.82; p[i + 1] = color[1] * 0.82; p[i + 2] = color[2] * 0.82;
+                // Wall and its shading are the near-neutral light pixels; keep their brightness so shading survives.
+                const lumv = lum(p[i], p[i + 1], p[i + 2]);
+                if (lumv > 190 && Math.max(p[i], p[i + 1], p[i + 2]) - Math.min(p[i], p[i + 1], p[i + 2]) < 40) {
+                    const k = Math.min(1, lumv / 255);
+                    p[i] = color[0] * k; p[i + 1] = color[1] * k; p[i + 2] = color[2] * k;
                 }
             }
             cx.putImageData(data, 0, 0);
@@ -593,11 +593,11 @@
         while (x < to) {
             const img = assets.houses[Math.floor(Math.random() * assets.houses.length)];
             const halfW = (img.width * HOUSE_SCALE) / 2;
-            const cxPos = x + halfW;
-            if (fixed.every((fx) => Math.abs(fx - cxPos) > HOUSE_CLEARANCE + halfW * 0.3)) {
-                houses.push({ img: colourHouse(img, pickWallColor()), x: cxPos });
+            if (fixed.every((fx) => Math.abs(fx - x) > HOUSE_CLEARANCE + halfW * 0.3)) {
+                houses.push({ img: colourHouse(img, pickWallColor()), x });
             }
-            x += halfW * 2 + 40 + Math.random() * 260;
+            // One house every 200-350 steps.
+            x += (200 + Math.random() * 150) * STEP;
         }
     };
     const drawHouses = () => {
