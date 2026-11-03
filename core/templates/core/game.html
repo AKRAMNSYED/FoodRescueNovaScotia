@@ -440,11 +440,14 @@
         return list;
     };
     // Random order, but every diagonal number is guaranteed to come up within the first 12 calls.
-    const rollBingoCalls = () => {
-        const diagonal = BINGO_ROWS.map((row, i) => row[i]).filter((v) => v !== 'FREE');
+    const rollBingoCalls = (rigLoss) => {
+        let diagonal = BINGO_ROWS.map((row, i) => row[i]).filter((v) => v !== 'FREE');
+        if (rigLoss) {
+            diagonal = shuffle(diagonal).slice(1);
+        }
         const others = [];
         for (let n = 1; n <= 75; n++) {
-            if (!diagonal.includes(n)) { others.push(n); }
+            if (!diagonal.includes(n) && !(rigLoss && BINGO_ROWS.some((row, i) => row[i] === n))) { others.push(n); }
         }
         const picked = diagonal.concat(shuffle(others).slice(0, BINGO_MAX_CALLS - diagonal.length));
         return shuffle(picked);
@@ -954,7 +957,9 @@
     const failOverlay = document.getElementById('fail-overlay');
     const failRestart = document.getElementById('fail-restart');
 
-    const failQuest = () => {
+    const failQuest = (reason) => {
+        document.getElementById('fail-text').textContent = reason
+            || 'You had no can of food to give, so AJ Smeltzer would not let you in. You have to start again.';
         stop();
         failOverlay.hidden = false;
         failRestart.focus();
@@ -1045,7 +1050,11 @@
             const nextAt = BINGO_FIRST + bingoCalled * BINGO_GAP;
             bingoTimerEl.textContent = 'Next number in ' + Math.max(0, nextAt - elapsed).toFixed(1) + 's';
         } else if (bingoTimer) {
-            bingoTimerEl.textContent = 'All numbers called. Finish your card!';
+            bingoTimerEl.textContent = '';
+            if (elapsed >= BINGO_FIRST + bingoCalls.length * BINGO_GAP) {
+                closeBingo(true);
+                failQuest('Bingo is over and you did not win. You have to start again.');
+            }
         }
     };
 
@@ -1054,7 +1063,7 @@
         Object.keys(held).forEach((side) => { held[side] = false; });
         keys.clear();
         bingoCalled = 0;
-        bingoCalls = rollBingoCalls();
+        bingoCalls = rollBingoCalls(Math.random() < 0.1);
         bingoMarks = new Set();
         buildBingoGrid();
         bingoCall.textContent = 'Get ready...';
