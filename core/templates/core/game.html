@@ -15,6 +15,10 @@
     }
     .game-pick:hover { background: #d6f0e8; }
     .game-pick img { height: 150px; width: auto; image-rendering: pixelated; }
+    .name-field { max-width: 340px; margin: 1rem auto 0; display: flex; flex-direction: column; gap: 0.35rem; text-align: left; }
+    .name-field label { font-weight: 700; color: #0b3d2e; }
+    .name-field input { min-height: 44px; font: inherit; padding: 0 0.75rem; border: 2px solid #2f9e7d; border-radius: 8px; }
+    .name-field .name-error { margin: 0; color: #b91c1c; font-weight: 600; }
     .custom-panel { margin-top: 2rem; padding: 1.25rem; background: #eaf7f3; border-left: 5px solid #2f9e7d; border-radius: 8px; }
     .custom-panel h2 { margin-top: 0; font-size: 1.3rem; }
     .custom-layout { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; justify-content: center; }
@@ -183,6 +187,11 @@
 
     <section id="game-select" aria-labelledby="game-select-title">
         <h2 id="game-select-title">Pick your character</h2>
+        <div class="name-field">
+            <label for="player-name">Your name (required)</label>
+            <input type="text" id="player-name" maxlength="16" autocomplete="nickname" required aria-describedby="player-name-error">
+            <p id="player-name-error" class="name-error" role="alert" hidden>Please enter your name before you play.</p>
+        </div>
         <div class="game-pick-grid">
             <button type="button" class="game-pick" data-character="eve">
                 <img src="{% static 'Game/Eve_Standing.png' %}" alt="">
@@ -407,6 +416,7 @@
 
     let assets = null;
     let character = null;
+    let playerName = '';
     let running = false;
     let rafId = 0;
     let lastTime = 0;
@@ -1440,6 +1450,23 @@
         }
         ctx.drawImage(img, -w / 2, 0, w, h);
         ctx.restore();
+        drawNameTag(feetY - jumpH - h);
+    };
+
+    const drawNameTag = (headY) => {
+        if (!playerName) { return; }
+        const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
+        ctx.font = '700 16px ' + family;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(playerName).width + 16;
+        ctx.fillStyle = 'rgba(11, 61, 46, 0.85)';
+        roundedRect(W / 2 - tw / 2, headY - 26, tw, 22, 8);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(playerName, W / 2, headY - 14);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
     };
 
     const roundedRect = (x, y, w, h, r) => {
@@ -1651,7 +1678,7 @@
         const bh = lines.length * 26 + 22;
         const headY = feetY - jumpH - character.stand.height * CHAR_SCALE;
         const bx = Math.min(W - bw - 8, Math.max(8, W / 2 - bw / 2));
-        const by = Math.max(8, headY - 40 - bh);
+        const by = Math.max(8, headY - 70 - bh);
         const tailY = by + bh;
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#0b3d2e';
@@ -2112,8 +2139,28 @@
         }
     };
 
+    const nameInput = document.getElementById('player-name');
+    const nameError = document.getElementById('player-name-error');
+    const NAME_KEY = 'frns-player-name';
+    try { nameInput.value = localStorage.getItem(NAME_KEY) || ''; } catch (error) { /* storage unavailable */ }
+    nameInput.addEventListener('input', () => { nameError.hidden = true; });
+
+    // The name is required; returns false and prompts if it is empty.
+    const readName = () => {
+        const value = nameInput.value.trim().replace(/\s+/g, ' ');
+        if (!value) {
+            nameError.hidden = false;
+            nameInput.focus();
+            return false;
+        }
+        playerName = value;
+        try { localStorage.setItem(NAME_KEY, value); } catch (error) { /* storage unavailable */ }
+        return true;
+    };
+
     document.querySelectorAll('.game-pick').forEach((button) => {
         button.addEventListener('click', async () => {
+            if (!readName()) { return; }
             try {
                 assets = await assetsPromise;
             } catch (error) {
@@ -2124,6 +2171,7 @@
     });
 
     document.getElementById('custom-play').addEventListener('click', async () => {
+        if (!readName()) { return; }
         try {
             assets = await assetsPromise;
         } catch (error) {
