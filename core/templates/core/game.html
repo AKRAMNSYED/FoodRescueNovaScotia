@@ -2145,10 +2145,35 @@
     try { nameInput.value = localStorage.getItem(NAME_KEY) || ''; } catch (error) { /* storage unavailable */ }
     nameInput.addEventListener('input', () => { nameError.hidden = true; });
 
+    // Names are checked after undoing common letter swaps (1337 speak, repeated letters, spacing).
+    // Severe words are blocked anywhere in the name; milder ones only as whole words.
+    const BLOCKED_ANYWHERE = [
+        'fuck', 'shit', 'bitch', 'nigg', 'faggot', 'whore', 'slut', 'pussy', 'penis', 'vagina',
+        'rapist', 'hitler', 'retard', 'bastard', 'asshole', 'porn', 'molest', 'tranny',
+    ];
+    const BLOCKED_WORDS = ['ass', 'arse', 'damn', 'piss', 'crap', 'sex', 'tit', 'tits', 'boob', 'boobs', 'fag', 'gay', 'cum', 'anal', 'nude',
+        'cunt', 'dick', 'dicks', 'cock', 'cocks', 'rape', 'nazi', 'twat', 'wank', 'pedo', 'dyke', 'paki', 'chink', 'spic', 'kike'];
+    const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i', '+': 't' };
+    const isOffensive = (text) => {
+        const lower = text.toLowerCase().replace(/[0134578@$!+]/g, (c) => LEET[c]);
+        const words = lower.split(/[^a-z]+/).filter(Boolean).map((w) => w.replace(/(.)\1+/g, '$1'));
+        const squashed = lower.replace(/[^a-z]/g, '').replace(/(.)\1+/g, '$1');
+        const blockedRoots = BLOCKED_ANYWHERE.map((w) => w.replace(/(.)\1+/g, '$1'));
+        return blockedRoots.some((w) => squashed.includes(w))
+            || words.some((w) => BLOCKED_WORDS.includes(w));
+    };
+
     // The name is required; returns false and prompts if it is empty.
     const readName = () => {
         const value = nameInput.value.trim().replace(/\s+/g, ' ');
         if (!value) {
+            nameError.textContent = 'Please enter your name before you play.';
+            nameError.hidden = false;
+            nameInput.focus();
+            return false;
+        }
+        if (isOffensive(value)) {
+            nameError.textContent = 'Please choose a kind, family-friendly name.';
             nameError.hidden = false;
             nameInput.focus();
             return false;
