@@ -320,6 +320,16 @@
         </div>
     </div>
 
+    <div class="scroll-overlay" id="finish-overlay" hidden>
+        <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="finish-title" aria-describedby="finish-text">
+            <h2 id="finish-title">You finished the singleplayer game!</h2>
+            <p id="finish-text">Something is coming NEXT WEEK! Then you can play infinitely... Oops, too much leaked!</p>
+            <div class="confirm-actions">
+                <button type="button" class="game-btn" id="finish-close">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div class="scroll-overlay" id="confirm-overlay" hidden>
         <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
             <h2 id="confirm-title">Are you sure?</h2>
@@ -839,9 +849,9 @@
             hudText.textContent = 'Give all ' + Q3_GOAL + ' cans to Feed Nova Scotia (' + q3Given + '/' + Q3_GOAL + ' donated).';
         } else if (q3Stage === 'done') {
             hudTitle.textContent = 'Quest 3 complete! +1 point';
-            hudText.textContent = 'You donated ' + Q3_GOAL + ' cans to Feed Nova Scotia. More quests are coming soon!';
+            hudText.textContent = 'You donated ' + Q3_GOAL + ' cans to Feed Nova Scotia. You finished the singleplayer game!';
         } else {
-            hudText.textContent = 'You traded the soccer ball for $25. More quests are coming soon!';
+            hudText.textContent = 'You traded the soccer ball for $25.';
         }
         hudBallItem.hidden = !hasBall;
     };
@@ -969,7 +979,10 @@
                 floatText('+1 point', '#15803d');
                 banner = { lines: ['QUEST 3 COMPLETE!  +1 point', 'You donated all 5 cans'], age: 0 };
                 say(['Five cans! Thank you so much!']);
-                statusBox.textContent = 'Quest 3 complete. You donated 5 cans to Feed Nova Scotia and earned 1 point.';
+                statusBox.textContent = 'Quest 3 complete. You donated 5 cans to Feed Nova Scotia and earned 1 point. You finished the singleplayer game!';
+                updateHud();
+                finishGame();
+                return;
             }
             updateHud();
         } else if (action.id === 'enter') {
@@ -987,6 +1000,24 @@
             tradeBall();
         }
     };
+
+    const finishOverlay = document.getElementById('finish-overlay');
+    const finishClose = document.getElementById('finish-close');
+
+    // Brief pause so the player sees the last can being donated before the popup.
+    const finishGame = () => {
+        setTimeout(() => {
+            if (!running) { return; }
+            stop();
+            finishOverlay.hidden = false;
+            finishClose.focus();
+        }, 1200);
+    };
+
+    finishClose.addEventListener('click', () => {
+        finishOverlay.hidden = true;
+        start();
+    });
 
     const failOverlay = document.getElementById('fail-overlay');
     const failRestart = document.getElementById('fail-restart');
@@ -1228,7 +1259,7 @@
                     + '<p>Give every can to <strong>Feed Nova Scotia</strong>. Progress: ' + q3Given + '/' + Q3_GOAL + ' donated.</p>',
                 done: '<p class="scroll-label">&mdash; QUEST 3 &mdash;</p>'
                     + '<p class="quest-done"><strong>&#10003; 3. Donate 5 cans: COMPLETE (+1 point)</strong></p>'
-                    + '<p>More quests are coming soon!</p>',
+                    + '<p>You finished the singleplayer game!</p>',
             }[q3Stage];
             html = '<p class="quest-done"><strong>&#10003; 1. Go to a store, buy food: COMPLETE (+1 point)</strong></p>'
                 + '<p>You gave ' + Math.max(delivered, DELIVER_GOAL) + ' cans to <strong>Feed Nova Scotia</strong>. Thank you!</p>'
