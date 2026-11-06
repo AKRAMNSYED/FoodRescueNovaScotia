@@ -165,6 +165,7 @@ class MultiplayerPlayer(models.Model):
     normalized_name = models.CharField(max_length=32, unique=True)
     password_hash = models.CharField(max_length=128)
     avatar = models.CharField(max_length=8, default='eve')
+    custom_character = models.JSONField(default=dict, blank=True)
     donated_cans = models.PositiveIntegerField(default=0)
     balance = models.PositiveIntegerField(default=0)
     cans_held = models.PositiveIntegerField(default=0)

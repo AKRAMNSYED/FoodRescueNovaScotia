@@ -28,6 +28,7 @@ from .multiplayer import (
 	get_world_snapshot,
 	perform_action,
 )
+from .multiplayer_views import DEFAULT_CUSTOM_CHARACTER, _custom_character_config
 
 
 class SubadminApprovalTests(TestCase):
@@ -410,6 +411,47 @@ class MultiplayerTests(TestCase):
 			content_type='application/json',
 		)
 		self.assertEqual(duplicate.status_code, 409)
+
+	def test_registration_saves_custom_character_choices_for_later_sign_ins(self):
+		custom = {
+			'hair': 'short',
+			'hairColor': '#123456',
+			'skin': '#c08040',
+			'shirt': '#abcdef',
+			'pants': '#102030',
+			'shoes': '#f0e0d0',
+			'shoulders': 2,
+			'hat': True,
+			'hatColor': '#987654',
+		}
+		response = self.client.post(
+			reverse('multiplayer_auth'),
+			data={
+				'mode': 'register',
+				'name': 'CustomPlayer',
+				'password': 'Safe-password-123',
+				'avatar': 'custom',
+				'custom_character': custom,
+			},
+			content_type='application/json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		player = MultiplayerPlayer.objects.get()
+		self.assertEqual(player.avatar, 'custom')
+		self.assertEqual(player.custom_character, custom)
+		self.assertEqual(response.json()['player']['custom_character'], custom)
+		self.assertEqual(
+			self.client.get(reverse('multiplayer_session')).json()['player']['custom_character'],
+			custom,
+		)
+
+	def test_custom_character_config_rejects_invalid_colors_and_options(self):
+		self.assertEqual(_custom_character_config({}), DEFAULT_CUSTOM_CHARACTER)
+		self.assertIsNone(_custom_character_config({'shirt': 'url(bad-value)'}))
+		self.assertIsNone(_custom_character_config({'hair': 'purple'}))
+		self.assertIsNone(_custom_character_config({'shoulders': True}))
+		self.assertIsNone(_custom_character_config({'hat': 'yes'}))
 
 	def test_sign_in_requires_matching_password(self):
 		player = self.create_player('Nova')

@@ -135,6 +135,7 @@ def _player_payload(player):
         'id': player.pk,
         'name': player.name,
         'avatar': player.avatar,
+        'custom_character': player.custom_character,
         'balance': player.balance,
         'cans_held': player.cans_held,
         'donated_cans': player.donated_cans,
@@ -170,6 +171,7 @@ def get_world_snapshot(player_id, now=None):
             'donated_cans': presence.player.donated_cans,
             'x': presence.x,
             'avatar': presence.avatar,
+            'custom_character': presence.player.custom_character,
         })
 
     round_no = timing['round_number']
@@ -208,7 +210,7 @@ def get_world_snapshot(player_id, now=None):
 def update_presence(connection_id, x, avatar, now=None):
     now = now or timezone.now()
     if (
-        avatar not in {'eve', 'jim'}
+        avatar not in {'eve', 'jim', 'custom'}
         or isinstance(x, bool)
         or not isinstance(x, (int, float))
         or not math.isfinite(x)
@@ -235,6 +237,7 @@ def update_presence(connection_id, x, avatar, now=None):
         'donated_cans': presence.player.donated_cans,
         'x': x,
         'avatar': avatar,
+        'custom_character': presence.player.custom_character,
     }
 
 

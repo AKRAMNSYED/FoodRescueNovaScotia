@@ -45,6 +45,8 @@
         eveWalk: asset('eveWalk'),
         jim: asset('jim'),
         jimWalk: asset('jimWalk'),
+        hatStand: asset('hatStand'),
+        hatWalk: asset('hatWalk'),
         sobeys: asset('sobeys'),
         feed: asset('feed'),
         aj: asset('aj'),
@@ -87,11 +89,214 @@
     let actionPending = false;
     let authMode = 'login';
     let currentStatus = '';
+    const customizer = document.getElementById('mp-customizer');
+    const customPreview = document.getElementById('mp-custom-preview');
+    const customInputs = {
+        hair: document.getElementById('mp-custom-hair'),
+        hairColor: document.getElementById('mp-custom-hair-color'),
+        skin: document.getElementById('mp-custom-skin'),
+        shirt: document.getElementById('mp-custom-shirt'),
+        pants: document.getElementById('mp-custom-pants'),
+        shoes: document.getElementById('mp-custom-shoes'),
+        shoulders: document.getElementById('mp-custom-shoulders'),
+        hat: document.getElementById('mp-custom-hat'),
+        hatColor: document.getElementById('mp-custom-hat-color'),
+    };
+    const customDefaults = {
+        hair: 'long',
+        hairColor: '#ffeb3b',
+        skin: '#ffecb3',
+        shirt: '#8bc34a',
+        pants: '#0288d1',
+        shoes: '#f44336',
+        shoulders: 0,
+        hat: false,
+        hatColor: '#689f38',
+    };
+    const customSpriteCache = new Map();
 
     const csrfToken = () => {
         const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
         return match ? decodeURIComponent(match[1]) : '';
     };
+
+    const readCustomCharacter = () => ({
+        hair: customInputs.hair.value,
+        hairColor: customInputs.hairColor.value,
+        skin: customInputs.skin.value,
+        shirt: customInputs.shirt.value,
+        pants: customInputs.pants.value,
+        shoes: customInputs.shoes.value,
+        shoulders: Number(customInputs.shoulders.value),
+        hat: customInputs.hat.checked,
+        hatColor: customInputs.hatColor.value,
+    });
+
+    const applyCustomCharacter = (settings) => {
+        const values = { ...customDefaults, ...(settings || {}) };
+        Object.entries(customInputs).forEach(([key, input]) => {
+            if (key === 'hat') input.checked = Boolean(values[key]);
+            else input.value = values[key];
+        });
+        customSpriteCache.clear();
+        drawCustomPreview();
+    };
+
+    const tintSprite = (image, settings, hatImage) => {
+        if (!image?.complete || !image.naturalWidth) return image;
+        const source = document.createElement('canvas');
+        source.width = image.naturalWidth;
+        source.height = image.naturalHeight;
+        const sourceContext = source.getContext('2d', { willReadFrequently: true });
+        sourceContext.drawImage(image, 0, 0);
+        const frame = sourceContext.getImageData(0, 0, source.width, source.height);
+        const pixels = frame.data;
+        const targets = {
+            hair: settings.hairColor,
+            skin: settings.skin,
+            shirt: settings.shirt,
+            pants: settings.pants,
+            shoes: settings.shoes,
+        };
+        const references = {
+            hair: [255, 235, 59],
+            skin: [255, 236, 179],
+            shirt: [139, 195, 74],
+            pants: [2, 136, 209],
+            shoes: [244, 67, 54],
+        };
+        const targetRgb = (value) => [1, 3, 5].map((index) => parseInt(value.slice(index, index + 2), 16));
+        const luminance = (r, g, b) => .299 * r + .587 * g + .114 * b;
+        const regionOf = (r, g, b) => {
+            if (r > 235 && g > 170 && b < 135) return 'hair';
+            if (r > 235 && g > 195 && g < 246 && b >= 140 && b < 200) return 'skin';
+            if (g > r + 25 && g > b + 40 && r < 170) return 'shirt';
+            if (b > r + 100 && b > g + 30) return 'pants';
+            if (r > 150 && g < 100 && b < 100) return 'shoes';
+            return null;
+        };
+        const topY = (() => {
+            for (let y = 0; y < source.height; y += 1) {
+                for (let x = 0; x < source.width; x += 1) {
+                    if (pixels[(y * source.width + x) * 4 + 3]) return y;
+                }
+            }
+            return 0;
+        })();
+        const hairCutoff = topY + source.height * .17;
+
+        for (let y = 0; y < source.height; y += 1) {
+            for (let x = 0; x < source.width; x += 1) {
+                const index = (y * source.width + x) * 4;
+                if (!pixels[index + 3]) continue;
+                const region = regionOf(pixels[index], pixels[index + 1], pixels[index + 2]);
+                if (!region || (region === 'hair' && settings.hair === 'short' && y > hairCutoff)) continue;
+                const target = targetRgb(targets[region]);
+                const reference = references[region];
+                const sourceLuminance = luminance(pixels[index], pixels[index + 1], pixels[index + 2]);
+                const referenceLuminance = luminance(...reference);
+                const ratio = sourceLuminance / referenceLuminance;
+                for (let channel = 0; channel < 3; channel += 1) {
+                    const value = ratio <= 1
+                        ? target[channel] * ratio
+                        : target[channel] + (255 - target[channel]) * Math.min(1, ratio - 1);
+                    pixels[index + channel] = Math.max(0, Math.min(255, value));
+                }
+            }
+        }
+        sourceContext.putImageData(frame, 0, 0);
+
+        const widen = Number(settings.shoulders) * 3;
+        const result = document.createElement('canvas');
+        result.width = source.width + widen * 2;
+        result.height = source.height;
+        const context = result.getContext('2d');
+        context.imageSmoothingEnabled = false;
+        context.drawImage(source, widen, 0);
+        if (widen) {
+            context.drawImage(source, 0, Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37),
+                0, Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37));
+            context.drawImage(source, Math.floor(source.width * .72), Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37),
+                result.width - Math.floor(source.width * .28), Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37));
+        }
+        if (settings.hat && hatImage?.complete && hatImage.naturalWidth) {
+            const hat = document.createElement('canvas');
+            hat.width = hatImage.naturalWidth;
+            hat.height = hatImage.naturalHeight;
+            const hatContext = hat.getContext('2d', { willReadFrequently: true });
+            hatContext.drawImage(hatImage, 0, 0);
+            const hatPixels = hatContext.getImageData(0, 0, hat.width, hat.height);
+            const target = targetRgb(settings.hatColor);
+            for (let index = 0; index < hatPixels.data.length; index += 4) {
+                const data = hatPixels.data;
+                if (!data[index + 3] || luminance(data[index], data[index + 1], data[index + 2]) < 40) continue;
+                const ratio = luminance(data[index], data[index + 1], data[index + 2]) / luminance(104, 159, 56);
+                for (let channel = 0; channel < 3; channel += 1) {
+                    data[index + channel] = Math.max(0, Math.min(255, target[channel] * ratio));
+                }
+            }
+            hatContext.putImageData(hatPixels, 0, 0);
+            const hatTop = Math.max(0, Math.round(topY - hat.height + 10));
+            context.drawImage(hat, Math.round(result.width / 2 - hat.width / 2), hatTop);
+        }
+        return result;
+    };
+
+    const characterSprite = (person, walking = false) => {
+        if (person.avatar !== 'custom') {
+            return pictures[person.avatar === 'jim' ? (walking ? 'jimWalk' : 'jim') : (walking ? 'eveWalk' : 'eve')];
+        }
+        const settings = { ...customDefaults, ...(person.custom_character || {}) };
+        const key = JSON.stringify([person.id, walking, settings]);
+        if (!customSpriteCache.has(key)) {
+            customSpriteCache.set(key, tintSprite(
+                walking ? pictures.eveWalk : pictures.eve,
+                settings,
+                walking ? pictures.hatWalk : pictures.hatStand,
+            ));
+        }
+        return customSpriteCache.get(key);
+    };
+
+    const drawCustomPreview = () => {
+        if (!customPreview || !pictures.eve?.complete || !pictures.eve.naturalWidth) return;
+        const settings = readCustomCharacter();
+        const standing = tintSprite(pictures.eve, settings, pictures.hatStand);
+        const walking = tintSprite(pictures.eveWalk, settings, pictures.hatWalk);
+        const context = customPreview.getContext('2d');
+        context.clearRect(0, 0, customPreview.width, customPreview.height);
+        context.imageSmoothingEnabled = false;
+        [standing, walking].forEach((sprite, index) => {
+            if (!sprite?.width || !sprite?.height) return;
+            const scale = Math.min(150 / sprite.height, 170 / sprite.width);
+            const width = sprite.width * scale;
+            const height = sprite.height * scale;
+            context.drawImage(sprite, index * 180 + (180 - width) / 2, 170 - height, width, height);
+            context.fillStyle = '#0b3d2e';
+            context.textAlign = 'center';
+            context.font = '12px Comfortaa, Arial, sans-serif';
+            context.fillText(index ? 'Walking' : 'Standing', index * 180 + 90, 177);
+        });
+    };
+
+    pictures.eve.addEventListener('load', drawCustomPreview);
+
+    const updateCustomizerVisibility = () => {
+        customizer.hidden = authMode !== 'register' || avatarSelect.value !== 'custom';
+        if (!customizer.hidden) drawCustomPreview();
+    };
+
+    avatarSelect.addEventListener('change', updateCustomizerVisibility);
+    Object.values(customInputs).forEach((input) => {
+        input.addEventListener('input', () => {
+            customSpriteCache.clear();
+            drawCustomPreview();
+        });
+        input.addEventListener('change', () => {
+            customSpriteCache.clear();
+            drawCustomPreview();
+        });
+    });
 
     const setStatus = (message) => {
         currentStatus = message || '';
@@ -128,6 +333,7 @@
         document.getElementById('mp-password').autocomplete = registering ? 'new-password' : 'current-password';
         avatarSelect.hidden = !registering;
         avatarLabel.hidden = !registering;
+        updateCustomizerVisibility();
         authError.textContent = '';
     };
 
@@ -148,6 +354,7 @@
                     name: document.getElementById('mp-name').value,
                     password: document.getElementById('mp-password').value,
                     avatar: avatarSelect.value,
+                    custom_character: readCustomCharacter(),
                 }),
             });
             const result = await response.json();
@@ -361,13 +568,13 @@
         const x = WORLD_WIDTH / 2 + person.x - cameraX;
         if (x < -55 || x > WORLD_WIDTH + 55) return;
         const moving = isLocal ? pressed.size > 0 : person.walking && performance.now() - person.lastMovedAt < 350;
-        const image = moving
-            ? (person.avatar === 'jim' ? pictures.jimWalk : pictures.eveWalk)
-            : (pictures[person.avatar] || pictures.eve);
-        const h = image.complete && image.naturalWidth ? 90 : 70;
-        const w = image.complete && image.naturalWidth ? h * image.naturalWidth / image.naturalHeight : 48;
+        const image = characterSprite(person, moving);
+        const imageWidth = image.naturalWidth || image.width;
+        const imageHeight = image.naturalHeight || image.height;
+        const h = imageWidth && imageHeight ? 90 : 70;
+        const w = imageWidth && imageHeight ? h * imageWidth / imageHeight : 48;
         const y = 420;
-        if (image.complete && image.naturalWidth) {
+        if (imageWidth && imageHeight) {
             ctx.drawImage(image, x - w / 2, y - h, w, h);
         } else {
             ctx.fillStyle = isLocal ? '#f59e0b' : '#2563eb';

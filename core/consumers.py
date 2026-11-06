@@ -32,6 +32,7 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
         self.player_id = player.pk
         self.player_name = player.name
         self.avatar = player.avatar
+        self.custom_character = player.custom_character
         self.connection_id = uuid.uuid4()
         await self.create_presence()
         await self.channel_layer.group_add(WORLD_GROUP, self.channel_name)
@@ -163,6 +164,7 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
             'donated_cans': presence.player.donated_cans,
             'x': presence.x,
             'avatar': presence.avatar,
+            'custom_character': presence.player.custom_character,
         }
 
     @database_sync_to_async
@@ -185,6 +187,7 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
             'donated_cans': presence.player.donated_cans,
             'x': presence.x,
             'avatar': presence.avatar,
+            'custom_character': presence.player.custom_character,
         }
 
     @database_sync_to_async
