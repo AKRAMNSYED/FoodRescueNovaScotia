@@ -1,0 +1,155 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Multiplayer Game | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<style>
+    .mp-card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+    .mp-mode-links, .mp-actions, .mp-move-controls { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: center; }
+    .mp-mode-links { margin: 1rem 0 1.5rem; }
+    .mp-mode-links a, .mp-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .6rem 1rem; border: 2px solid #0b3d2e; border-radius: 9px; background: #0b3d2e; color: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .mp-mode-links a[aria-current="page"], .mp-button.secondary { background: #fff; color: #0b3d2e; }
+    .mp-button:disabled { opacity: .55; cursor: not-allowed; }
+    .mp-auth { max-width: 430px; margin: 0 auto; padding: 1rem; background: #eaf7f3; border-radius: 10px; }
+    .mp-auth form { display: grid; gap: .75rem; }
+    .mp-auth label { display: grid; gap: .3rem; font-weight: 700; }
+    .mp-auth input, .mp-auth select { box-sizing: border-box; width: 100%; min-height: 44px; padding: .55rem; border: 2px solid #2f9e7d; border-radius: 7px; font: inherit; }
+    .mp-auth-error { min-height: 1.4em; color: #b91c1c; font-weight: 700; }
+    .mp-hud { display: flex; flex-wrap: wrap; justify-content: center; gap: .65rem 1rem; margin-bottom: .75rem; padding: .75rem; color: #0b3d2e; background: #eaf7f3; border: 2px solid #2f9e7d; border-radius: 10px; font-weight: 700; }
+    .mp-hud span { white-space: nowrap; }
+    #mp-canvas { display: block; width: 100%; height: auto; border: 2px solid #0b3d2e; border-radius: 10px; background: #4fc3f7; image-rendering: pixelated; }
+    .mp-game-status { min-height: 1.5em; color: #0b3d2e; font-weight: 700; text-align: center; }
+    .mp-move-controls { margin-top: .75rem; }
+    .mp-move-controls .mp-button { min-width: 85px; touch-action: none; user-select: none; }
+    .mp-bingo { margin-top: 1rem; padding: 1rem; border: 3px solid #1e3a8a; border-radius: 12px; background: #fffbe6; }
+    .mp-bingo h2 { margin-top: 0; color: #1e3a8a; }
+    .mp-bingo-layout { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 1.25rem; }
+    .mp-bingo-board { display: grid; grid-template-columns: repeat(5, minmax(42px, 64px)); gap: 4px; }
+    .mp-bingo-cell { min-height: 46px; border: 2px solid #1e3a8a; border-radius: 6px; background: #fff; color: #1e3a8a; font: inherit; font-weight: 700; cursor: pointer; }
+    .mp-bingo-cell.called { background: #e0e7ff; }
+    .mp-bingo-cell.marked { background: #fde047; }
+    .mp-bingo-cell:disabled { cursor: default; }
+    .mp-bingo-info { max-width: 360px; line-height: 1.5; }
+    .mp-winners { padding-left: 1.5rem; }
+    .mp-leaderboard { position: fixed; inset: 0; z-index: 5000; display: grid; place-items: center; padding: 1rem; background: rgba(0,0,0,.65); }
+    .mp-leaderboard[hidden] { display: none; }
+    .mp-leaderboard-panel { width: min(94vw, 560px); max-height: 85vh; overflow-y: auto; padding: 1.25rem; border-radius: 12px; background: #fff; }
+    .mp-leaderboard-row { display: grid; grid-template-columns: 3rem 1fr auto; gap: .5rem; padding: .55rem 0; border-bottom: 1px solid #dfe7e2; }
+    .mp-bingo-time { white-space: pre-line; }
+    @media (max-width: 540px) {
+        .mp-card { padding: .85rem; }
+        .mp-bingo-layout { gap: .75rem; }
+        .mp-bingo-board { grid-template-columns: repeat(5, minmax(38px, 52px)); }
+        .mp-bingo-cell { min-height: 40px; }
+    }
+</style>
+
+<section class="mp-card" id="mp-app"
+         data-enabled="{{ multiplayer_available|yesno:'true,false' }}"
+         data-ws-path="/ws/game/multiplayer/"
+         data-auth-url="{% url 'multiplayer_auth' %}"
+         data-session-url="{% url 'multiplayer_session' %}"
+         data-logout-url="{% url 'multiplayer_logout' %}"
+         data-leaderboard-url="{% url 'multiplayer_leaderboard' %}">
+    <h1>Multiplayer</h1>
+    <p>Donate the most cans to Feed Nova Scotia. Daytime lasts five minutes; night lasts five minutes and includes three bingo rounds.</p>
+    <div class="mp-mode-links" aria-label="Game modes">
+        <a href="{% url 'game' %}">Singleplayer</a>
+        <a href="{% url 'game_multiplayer' %}" aria-current="page">Multiplayer</a>
+    </div>
+
+    {% if not multiplayer_available %}
+        <p role="alert" style="padding: 1rem; background: #fff3cd; border-left: 5px solid #e6a700;">
+            Multiplayer needs Railway Redis and a persistent database before players can register. The rest of the site will continue to work.
+        </p>
+    {% endif %}
+
+    <div id="mp-auth" class="mp-auth" {% if not multiplayer_available %}hidden{% endif %}>
+        <h2 id="mp-auth-title">Sign in to multiplayer</h2>
+        <form id="mp-auth-form">
+            {% csrf_token %}
+            <label for="mp-name">Player name</label>
+            <input id="mp-name" name="name" maxlength="16" autocomplete="username" required>
+            <label for="mp-password">Password</label>
+            <input id="mp-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required>
+            <label id="mp-avatar-label" for="mp-avatar" hidden>Character</label>
+            <select id="mp-avatar" hidden>
+                <option value="eve">Eve</option>
+                <option value="jim">Jim</option>
+            </select>
+            <button type="submit" class="mp-button" id="mp-auth-submit">Sign in</button>
+        </form>
+        <p id="mp-auth-error" class="mp-auth-error" role="alert"></p>
+        <p><span id="mp-auth-switch-label">New player?</span>
+            <button type="button" class="mp-button secondary" id="mp-auth-switch">Create an account</button>
+        </p>
+        <p>Names are unique. Passwords are stored securely, not as plain text. Use at least 8 characters.</p>
+    </div>
+
+    <section id="mp-world" hidden aria-label="Multiplayer game">
+        <div class="mp-hud" aria-live="polite">
+            <span id="mp-player-label"></span>
+            <span id="mp-phase">Connecting…</span>
+            <span id="mp-balance">$0</span>
+            <span id="mp-cans-held">0 cans</span>
+            <span id="mp-total-cans">0 donated</span>
+            <span id="mp-soccer-balls">0 soccer balls</span>
+        </div>
+        <p>Move with the arrow keys or A/D. Stand by Sobeys to buy cans for $5; visit Feed Nova Scotia to donate them. Your cans donated appear above your character.</p>
+        <canvas id="mp-canvas" width="960" height="548" tabindex="0" role="img" aria-label="Multiplayer world with players, Sobeys, and Feed Nova Scotia"></canvas>
+        <p id="mp-game-status" class="mp-game-status" role="status" aria-live="polite"></p>
+        <div class="mp-move-controls" aria-label="Movement controls">
+            <button type="button" class="mp-button" data-move="-1">◀ Left</button>
+            <button type="button" class="mp-button" data-move="1">Right ▶</button>
+            <button type="button" class="mp-button secondary" id="mp-action" disabled>Interact</button>
+        </div>
+        <div class="mp-actions" style="margin-top: .75rem;">
+            <button type="button" class="mp-button secondary" id="mp-leaderboard-open">Leaderboard</button>
+            <button type="button" class="mp-button secondary" id="mp-logout">Sign out</button>
+        </div>
+        <section id="mp-bingo" class="mp-bingo" hidden aria-labelledby="mp-bingo-title">
+            <h2 id="mp-bingo-title">Bingo night</h2>
+            <div class="mp-bingo-layout">
+                <div id="mp-bingo-board" class="mp-bingo-board" aria-label="Your bingo card"></div>
+                <div class="mp-bingo-info">
+                    <p id="mp-bingo-call">Waiting for the first number…</p>
+                    <p id="mp-bingo-round-time" class="mp-bingo-time"></p>
+                    <p id="mp-bingo-message" role="status" aria-live="polite"></p>
+                    <button type="button" class="mp-button" id="mp-bingo-claim" disabled>Call Bingo</button>
+                    <h3>Winners (3 per round)</h3>
+                    <ol id="mp-bingo-winners" class="mp-winners"></ol>
+                </div>
+            </div>
+        </section>
+    </section>
+</section>
+
+<div id="mp-leaderboard" class="mp-leaderboard" hidden>
+    <section class="mp-leaderboard-panel" role="dialog" aria-modal="true" aria-labelledby="mp-leaderboard-title">
+        <h2 id="mp-leaderboard-title">All-time most cans donated</h2>
+        <ol id="mp-leaderboard-list"></ol>
+        <button type="button" class="mp-button" id="mp-leaderboard-close">Close</button>
+    </section>
+</div>
+
+<div id="mp-assets" hidden
+     data-eve="{% static 'Game/Eve_Standing.png' %}"
+     data-eve-walk="{% static 'Game/Eve_Walk.png' %}"
+     data-jim="{% static 'Game/Jim_Standing.png' %}"
+     data-jim-walk="{% static 'Game/Jim_Walk.png' %}"
+     data-sobeys="{% static 'Game/Sobeys.png' %}"
+     data-feed="{% static 'Game/Feed_NS.png' %}"
+     data-aj="{% static 'Game/AJ_SMELTZER.png' %}"
+     data-house1="{% static 'Game/House_Variant_1.png' %}"
+     data-house2="{% static 'Game/House_Variant_2.png' %}"
+     data-house3="{% static 'Game/House_Variant_3.png' %}"
+     data-house4="{% static 'Game/House_Variant_4.png' %}"
+     data-tree1="{% static 'Game/Tree_Variant_1.png' %}"
+     data-tree2="{% static 'Game/Tree_Variant_2.png' %}"
+     data-tree3="{% static 'Game/Tree_Variant_3.png' %}"
+     data-sun="{% static 'Game/Sun.png' %}"
+     data-moon="{% static 'Game/Moon.png' %}"></div>
+
+<script src="{% static 'core/js/multiplayer.js' %}" defer></script>
+{% endblock %}

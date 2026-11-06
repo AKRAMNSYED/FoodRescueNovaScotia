@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import multiplayer_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -12,6 +13,11 @@ urlpatterns = [
     path('events/comment/', views.add_comment, name='add_comment'),
     path('events/comment/<int:comment_id>/delete/', views.delete_comment, name='delete_comment'),
     path('game/', views.game, name='game'),
+    path('game/multiplayer/', multiplayer_views.multiplayer_game, name='game_multiplayer'),
+    path('game/multiplayer/auth/', multiplayer_views.multiplayer_auth, name='multiplayer_auth'),
+    path('game/multiplayer/session/', multiplayer_views.multiplayer_session, name='multiplayer_session'),
+    path('game/multiplayer/logout/', multiplayer_views.multiplayer_logout, name='multiplayer_logout'),
+    path('game/multiplayer/leaderboard/', multiplayer_views.multiplayer_leaderboard, name='multiplayer_leaderboard'),
     path('qr-code/', views.qr_code, name='qr_code'),
     path('updates/', views.updates, name='updates'),
     path('donations/', views.donations, name='donations'),

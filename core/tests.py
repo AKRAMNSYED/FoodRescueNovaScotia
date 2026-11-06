@@ -1,14 +1,33 @@
-from datetime import date
+from datetime import date, timedelta
 from io import StringIO
 from unittest.mock import patch
+import uuid
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.management.base import CommandError
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import ChangeProposal, Comment, Event
+from .models import (
+	ChangeProposal,
+	Comment,
+	Event,
+	MultiplayerBingoWinner,
+	MultiplayerGameClock,
+	MultiplayerPlayer,
+	MultiplayerPresence,
+)
+from .multiplayer import (
+	DAY_PAY,
+	claim_bingo,
+	clean_player_name,
+	game_timing,
+	get_world_snapshot,
+	perform_action,
+)
 
 
 class SubadminApprovalTests(TestCase):
@@ -300,6 +319,211 @@ class CreateMainAdminCommandTests(TestCase):
 		existing_user.refresh_from_db()
 		self.assertFalse(existing_user.is_superuser)
 		self.assertTrue(existing_user.check_password('Existing-Password-83!'))
+
+
+@override_settings(MULTIPLAYER_AVAILABLE=True)
+class MultiplayerTests(TestCase):
+	def setUp(self):
+		self.now = timezone.now()
+		self.clock = MultiplayerGameClock.objects.create(
+			pk=1,
+			started_at=self.now,
+		)
+
+	def create_player(self, name='Player'):
+		return MultiplayerPlayer.objects.create(
+			name=name,
+			normalized_name=name.casefold(),
+			password_hash='not-used-by-tests',
+			balance=15,
+			last_paid_day=0,
+		)
+
+	def test_multiplayer_page_offers_separate_game_mode_and_auth(self):
+		response = self.client.get(reverse('game_multiplayer'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Create an account')
+		self.assertContains(response, 'Singleplayer')
+		self.assertContains(response, 'Multiplayer')
+
+	def test_unauthenticated_session_is_a_normal_signed_out_response(self):
+		response = self.client.get(reverse('multiplayer_session'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(response.json()['authenticated'])
+		self.assertIsNone(response.json()['player'])
+
+	def test_multiplayer_stays_disabled_until_redis_and_persistent_storage_exist(self):
+		with override_settings(MULTIPLAYER_AVAILABLE=False):
+			page = self.client.get(reverse('game_multiplayer'))
+			register = self.client.post(
+				reverse('multiplayer_auth'),
+				data={
+					'mode': 'register',
+					'name': 'New Player',
+					'password': 'Safe-password-123',
+				},
+				content_type='application/json',
+			)
+
+		self.assertContains(page, 'needs Railway Redis and a persistent database')
+		self.assertEqual(register.status_code, 503)
+
+	def test_player_names_block_offensive_words_and_allow_innocent_names(self):
+		for name in ('f u c k', 'Sh1t', 'hell', 'fuuuck'):
+			with self.subTest(name=name):
+				self.assertIsNone(clean_player_name(name))
+
+		for name in ('Akram', 'Dickens', 'Scunthorpe', 'Pakistan'):
+			with self.subTest(name=name):
+				self.assertEqual(clean_player_name(name), name)
+
+	def test_registration_stores_hashed_password_and_normalizes_name_uniqueness(self):
+		response = self.client.post(
+			reverse('multiplayer_auth'),
+			data={
+				'mode': 'register',
+				'name': 'Nova Player',
+				'password': 'Safe-password-123',
+				'avatar': 'jim',
+			},
+			content_type='application/json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		player = MultiplayerPlayer.objects.get()
+		self.assertEqual(player.normalized_name, 'nova player')
+		self.assertNotEqual(player.password_hash, 'Safe-password-123')
+		self.assertTrue(check_password('Safe-password-123', player.password_hash))
+		self.assertEqual(player.balance, 15)
+		self.assertEqual(player.avatar, 'jim')
+		self.assertEqual(self.client.session['multiplayer_player_id'], player.pk)
+
+		duplicate = self.client.post(
+			reverse('multiplayer_auth'),
+			data={
+				'mode': 'register',
+				'name': 'NOVA PLAYER',
+				'password': 'Different-password-456',
+			},
+			content_type='application/json',
+		)
+		self.assertEqual(duplicate.status_code, 409)
+
+	def test_sign_in_requires_matching_password(self):
+		player = self.create_player('Nova')
+		player.password_hash = make_password('Correct-password-123')
+		player.save(update_fields=('password_hash',))
+
+		bad_response = self.client.post(
+			reverse('multiplayer_auth'),
+			data={'mode': 'login', 'name': 'NOVA', 'password': 'wrong-password'},
+			content_type='application/json',
+		)
+		self.assertEqual(bad_response.status_code, 401)
+
+		good_response = self.client.post(
+			reverse('multiplayer_auth'),
+			data={'mode': 'login', 'name': 'nova', 'password': 'Correct-password-123'},
+			content_type='application/json',
+		)
+		self.assertEqual(good_response.status_code, 200)
+		self.assertEqual(self.client.session['multiplayer_player_id'], player.pk)
+
+	def test_day_and_three_bingo_rounds_follow_shared_five_minute_clock(self):
+		self.assertEqual(game_timing(self.now)['phase'], 'day')
+		self.assertEqual(
+			game_timing(self.now + timedelta(seconds=300))['round_number'],
+			1,
+		)
+		self.assertEqual(
+			game_timing(self.now + timedelta(seconds=400))['round_number'],
+			2,
+		)
+		self.assertEqual(
+			game_timing(self.now + timedelta(seconds=500))['round_number'],
+			3,
+		)
+		self.assertEqual(
+			game_timing(self.now + timedelta(seconds=600))['phase'],
+			'day',
+		)
+
+	def test_each_new_day_grants_fifteen_dollars_once(self):
+		player = self.create_player()
+		self.clock.started_at = self.now - timedelta(seconds=610)
+		self.clock.save(update_fields=('started_at',))
+
+		first = get_world_snapshot(player.pk, now=self.now)
+		second = get_world_snapshot(player.pk, now=self.now + timedelta(seconds=2))
+
+		player.refresh_from_db()
+		self.assertEqual(first['phase'], 'day')
+		self.assertEqual(player.balance, 15 + DAY_PAY)
+		self.assertEqual(second['player']['balance'], 15 + DAY_PAY)
+
+	def test_daytime_buy_and_feed_donation_update_all_time_score(self):
+		player = self.create_player()
+		presence = MultiplayerPresence.objects.create(
+			connection_id=uuid.uuid4(),
+			player=player,
+			x=450,
+		)
+
+		bought = perform_action(presence.connection_id, 'buy', now=self.now)
+		self.assertTrue(bought['ok'])
+		self.assertEqual(bought['player']['balance'], 10)
+		self.assertEqual(bought['player']['cans_held'], 1)
+
+		MultiplayerPresence.objects.filter(pk=presence.pk).update(x=-450)
+		donated = perform_action(presence.connection_id, 'donate', now=self.now)
+		self.assertTrue(donated['ok'])
+		self.assertEqual(donated['player']['cans_held'], 0)
+		self.assertEqual(donated['player']['donated_cans'], 1)
+		player.refresh_from_db()
+		self.assertEqual(player.donated_cans, 1)
+
+	def test_bingo_round_awards_soccer_ball_to_three_valid_winners(self):
+		players = [self.create_player(f'Player {index}') for index in range(4)]
+		self.clock.started_at = self.now - timedelta(seconds=590)
+		self.clock.save(update_fields=('started_at',))
+		with patch('core.multiplayer.bingo_calls', return_value=list(range(1, 76))):
+			for player in players[:3]:
+				result = claim_bingo(player.pk, round_number=3, now=self.now)
+				self.assertTrue(result['ok'])
+				self.assertEqual(result['player']['soccer_balls'], 1)
+
+			too_late = claim_bingo(players[3].pk, round_number=3, now=self.now)
+
+		self.assertFalse(too_late['ok'])
+		self.assertEqual(
+			MultiplayerBingoWinner.objects.filter(
+				cycle_number=0,
+				round_number=3,
+			).count(),
+			3,
+		)
+		self.assertEqual(
+			set(MultiplayerBingoWinner.objects.values_list('winner_slot', flat=True)),
+			{1, 2, 3},
+		)
+
+	def test_leaderboard_orders_all_players_by_total_donations(self):
+		low = self.create_player('Low')
+		high = self.create_player('High')
+		low.donated_cans = 2
+		low.save(update_fields=('donated_cans',))
+		high.donated_cans = 9
+		high.save(update_fields=('donated_cans',))
+
+		response = self.client.get(reverse('multiplayer_leaderboard'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(
+			[entry['name'] for entry in response.json()['players']],
+			['High', 'Low'],
+		)
 
 
 class CreateSubadminCommandTests(TestCase):

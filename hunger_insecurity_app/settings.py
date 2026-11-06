@@ -53,6 +53,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -93,21 +94,58 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'hunger_insecurity_app.wsgi.application'
+ASGI_APPLICATION = 'hunger_insecurity_app.asgi.application'
+
+REDIS_URL = os.environ.get('REDIS_URL')
+RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+ON_RAILWAY = any(
+    os.environ.get(name)
+    for name in ('RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_ENVIRONMENT_NAME', 'RAILWAY_SERVICE_NAME')
+)
+DATABASE_URL = os.environ.get('DATABASE_URL')
+MULTIPLAYER_AVAILABLE = not ON_RAILWAY or bool(
+    REDIS_URL and (DATABASE_URL or os.environ.get('RAILWAY_VOLUME_MOUNT_PATH'))
+)
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-# A Railway volume (RAILWAY_VOLUME_MOUNT_PATH) keeps accounts and data across redeploys.
+# A Railway volume or DATABASE_URL keeps accounts and data across redeploys.
 PERSISTENT_DIR = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH')
 DATA_DIR = Path(PERSISTENT_DIR) if PERSISTENT_DIR else BASE_DIR
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': DATA_DIR / 'db.sqlite3',
+if DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG,
+        ),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': DATA_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation

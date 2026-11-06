@@ -105,6 +105,37 @@
             flex-wrap: wrap;
             margin-left: 0;
         }
+        .game-nav-dropdown {
+            position: relative;
+            margin-right: 0.9rem;
+        }
+        .game-nav-dropdown > a {
+            margin-right: 0;
+        }
+        .game-nav-submenu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: -0.75rem;
+            z-index: 1100;
+            min-width: 180px;
+            padding: 0.55rem;
+            background: #0b3d2e;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .game-nav-dropdown:hover .game-nav-submenu,
+        .game-nav-dropdown:focus-within .game-nav-submenu {
+            display: grid;
+            gap: 0.7rem;
+        }
+        .game-nav-submenu a {
+            display: block;
+            margin: 0;
+            padding: 0.45rem 0.55rem;
+            line-height: 1.3;
+        }
         nav a {
             color: white;
             text-decoration: none;
@@ -236,6 +267,18 @@
                 align-items: stretch;
                 flex-wrap: nowrap;
             }
+            .game-nav-dropdown {
+                margin-right: 0;
+            }
+            .game-nav-submenu {
+                display: grid;
+                position: static;
+                min-width: 0;
+                padding: 0 0 0 0.75rem;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
             .nav-links a {
                 display: flex;
                 align-items: center;
@@ -354,7 +397,13 @@
             {% if user.is_authenticated and user.is_staff %}
                 <a href="{% url 'chat' %}"{% if current == 'chat' %} aria-current="page"{% endif %}>Chat</a>
             {% endif %}
-            <a href="{% url 'game' %}"{% if current == 'game' %} aria-current="page"{% endif %}>Game</a>
+            <div class="game-nav-dropdown">
+                <a href="{% url 'game' %}"{% if current == 'game' or current == 'game_multiplayer' %} aria-current="page"{% endif %}>Game</a>
+                <div class="game-nav-submenu" aria-label="Game modes">
+                    <a href="{% url 'game' %}">Singleplayer</a>
+                    <a href="{% url 'game_multiplayer' %}">Multiplayer</a>
+                </div>
+            </div>
             <a href="{% url 'qr_code' %}"{% if current == 'qr_code' %} aria-current="page"{% endif %}>QR Code</a>
             <a href="{% url 'updates' %}"{% if current == 'updates' %} aria-current="page"{% endif %}>Updates</a>
             <a href="{% url 'donations' %}"{% if current == 'donations' or current == 'donation_success' %} aria-current="page"{% endif %}>Donations</a>

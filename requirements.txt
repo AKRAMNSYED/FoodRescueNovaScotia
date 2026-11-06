@@ -1,5 +1,9 @@
 Django==6.1.1
+channels[daphne]>=4.2,<5
+channels-redis>=4.2,<5
+dj-database-url>=2.2,<4
 gunicorn>=23,<24
+psycopg[binary]>=3.2,<4
 stripe>=12
 whitenoise>=6,<7
 Pillow>=11,<12

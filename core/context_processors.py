@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from django.conf import settings
@@ -12,16 +13,14 @@ SKIP_DIRS = {'.venv', 'venv', '.git', 'staticfiles', 'node_modules', '__pycache_
 @lru_cache(maxsize=1)
 def count_code_lines():
     total = 0
-    for path in Path(settings.BASE_DIR).rglob('*'):
-        if path.suffix not in CODE_SUFFIXES or not path.is_file():
-            continue
-        if SKIP_DIRS.intersection(path.relative_to(settings.BASE_DIR).parts):
-            continue
-        try:
+    for root, dirs, filenames in os.walk(settings.BASE_DIR):
+        dirs[:] = [directory for directory in dirs if directory not in SKIP_DIRS]
+        for filename in filenames:
+            path = Path(root) / filename
+            if path.suffix not in CODE_SUFFIXES:
+                continue
             with path.open(encoding='utf-8', errors='ignore') as handle:
                 total += sum(1 for _ in handle)
-        except OSError:
-            continue
     return total
 
 

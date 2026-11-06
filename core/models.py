@@ -158,3 +158,66 @@ class ChangeProposal(models.Model):
         self.reviewed_at = timezone.now()
         self.save(update_fields=('status', 'reviewed_by', 'reviewed_at'))
         return True
+
+
+class MultiplayerPlayer(models.Model):
+    name = models.CharField(max_length=16)
+    normalized_name = models.CharField(max_length=32, unique=True)
+    password_hash = models.CharField(max_length=128)
+    avatar = models.CharField(max_length=8, default='eve')
+    donated_cans = models.PositiveIntegerField(default=0)
+    balance = models.PositiveIntegerField(default=0)
+    cans_held = models.PositiveIntegerField(default=0)
+    soccer_balls = models.PositiveIntegerField(default=0)
+    last_paid_day = models.IntegerField(default=-1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-donated_cans', 'name')
+
+    def __str__(self):
+        return self.name
+
+
+class MultiplayerGameClock(models.Model):
+    started_at = models.DateTimeField(default=timezone.now)
+
+
+class MultiplayerPresence(models.Model):
+    connection_id = models.UUIDField(primary_key=True)
+    player = models.ForeignKey(
+        MultiplayerPlayer,
+        on_delete=models.CASCADE,
+        related_name='connections',
+    )
+    x = models.FloatField(default=0)
+    avatar = models.CharField(max_length=8, default='eve')
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=('last_seen',))]
+
+
+class MultiplayerBingoWinner(models.Model):
+    cycle_number = models.PositiveIntegerField()
+    round_number = models.PositiveSmallIntegerField()
+    winner_slot = models.PositiveSmallIntegerField()
+    player = models.ForeignKey(
+        MultiplayerPlayer,
+        on_delete=models.CASCADE,
+        related_name='bingo_wins',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('created_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=('cycle_number', 'round_number', 'winner_slot'),
+                name='unique_multiplayer_bingo_winner_slot',
+            ),
+            models.UniqueConstraint(
+                fields=('cycle_number', 'round_number', 'player'),
+                name='unique_multiplayer_bingo_win',
+            ),
+        ]
