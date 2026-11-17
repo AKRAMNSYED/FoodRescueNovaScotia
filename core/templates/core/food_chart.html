@@ -1,0 +1,16 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Food Chart | Nova Scotia Hunger Insecurity{% endblock %}
+
+{% block content %}
+<div class="card fade-section" style="text-align: center;">
+    <h1>Food Chart</h1>
+    <p>Explore food resources and ways to give food in your community.</p>
+    <img src="{% static 'Food_chart.png' %}" alt="Food chart with places to find food and give food"
+         style="display: block; margin: 1.5rem auto; width: 100%; max-width: 1100px; height: auto;">
+</div>
+<div class="credits fade-section">
+    <span class="credits-name">Created by Akram Syed</span><br>{{ code_line_count }} lines of code
+</div>
+{% endblock %}

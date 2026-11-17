@@ -407,6 +407,7 @@
             <a href="{% url 'qr_code' %}"{% if current == 'qr_code' %} aria-current="page"{% endif %}>QR Code</a>
             <a href="{% url 'updates' %}"{% if current == 'updates' %} aria-current="page"{% endif %}>Updates</a>
             <a href="{% url 'donations' %}"{% if current == 'donations' or current == 'donation_success' %} aria-current="page"{% endif %}>Donations</a>
+            <a href="{% url 'food_chart' %}"{% if current == 'food_chart' %} aria-current="page"{% endif %}>Food Chart</a>
             <a href="/admin/">Admin Login</a>
         </div>
         {% endwith %}

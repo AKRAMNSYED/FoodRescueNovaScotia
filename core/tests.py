@@ -285,6 +285,24 @@ class UpdatesPageTests(TestCase):
 		self.assertContains(response, f'href="{reverse("updates")}"')
 
 
+@override_settings(STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+class FoodChartPageTests(TestCase):
+	def test_food_chart_page_is_public_and_uses_chart_image(self):
+		response = self.client.get(reverse('food_chart'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Food Chart')
+		self.assertContains(response, 'Food_chart.png')
+		self.assertContains(response, f'href="{reverse("food_chart")}"')
+
+	def test_home_links_find_food_and_give_food_to_chart(self):
+		response = self.client.get(reverse('home'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, f'<a href="{reverse("food_chart")}">find food</a>', html=True)
+		self.assertContains(response, f'<a href="{reverse("food_chart")}">give food</a>', html=True)
+
+
 class CreateMainAdminCommandTests(TestCase):
 	@patch(
 		'core.management.commands.create_main_admin.getpass.getpass',

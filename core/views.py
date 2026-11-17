@@ -16,6 +16,10 @@ def home(request):
     return render(request, 'core/home.html')
 
 
+def food_chart(request):
+    return render(request, 'core/food_chart.html')
+
+
 def _display_name_for_user(user):
     if not user or not getattr(user, 'is_authenticated', False):
         return 'Guest'
