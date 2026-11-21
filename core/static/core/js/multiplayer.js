@@ -41,6 +41,8 @@
         return image;
     };
     const pictures = {
+        background: asset('background'),
+        cloud: asset('cloud'),
         eve: asset('eve'),
         eveWalk: asset('eveWalk'),
         jim: asset('jim'),
@@ -50,6 +52,7 @@
         sobeys: asset('sobeys'),
         feed: asset('feed'),
         aj: asset('aj'),
+        trading: asset('trading'),
         houses: ['house1', 'house2', 'house3', 'house4'].map(asset),
         trees: ['tree1', 'tree2', 'tree3'].map(asset),
         sun: asset('sun'),
@@ -66,14 +69,22 @@
     const STORE_X = 450;
     const FEED_X = -450;
     const BINGO_X = 1050;
+    const TRADING_X = BINGO_X - 100;
     const PLAYER_SPEED = 220;
+    const HOUSE_SCALE = 0.715;
+    const TREE_HEIGHT = 210;
+    const ROAD_TOP_MARGIN = 38;
+    const ROAD_BOTTOM_MARGIN = 20;
     const pressed = new Set();
     const remotePlayers = new Map();
     let player = null;
+    let crownPlayerId = null;
     let socket = null;
     let reconnectTimer = null;
     let reconnectDelay = 1000;
     let localX = 0;
+    let roadMap = null;
+    let nightBackground = null;
     let phase = 'day';
     let phaseSecondsLeft = 0;
     let roundNumber = null;
@@ -142,102 +153,261 @@
         drawCustomPreview();
     };
 
-    const tintSprite = (image, settings, hatImage) => {
+    const PIXEL = 8.6;
+    const SHORT_HAIR_CUT = 0.17;
+    const HAT_OVERLAP = 0;
+    const REGION_REF = {
+        hair: [255, 235, 59], skin: [255, 236, 179], shirt: [139, 195, 74],
+        pants: [2, 136, 209], shoes: [244, 67, 54],
+    };
+    const hexToRgb = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
+    const lum = (red, green, blue) => 0.299 * red + 0.587 * green + 0.114 * blue;
+    const regionOf = (red, green, blue) => {
+        if (red > 235 && green > 170 && blue < 135) return 'hair';
+        if (red > 235 && green > 195 && green < 246 && blue >= 140 && blue < 200) return 'skin';
+        if (green > red + 25 && green > blue + 40 && red < 170) return 'shirt';
+        if (blue > red + 100 && blue > green + 30) return 'pants';
+        if (red > 150 && green < 100 && blue < 100) return 'shoes';
+        return '';
+    };
+    const tint = (target, reference, red, green, blue) => {
+        const ratio = lum(red, green, blue) / lum(...reference);
+        return target.map((value) => Math.max(
+            0,
+            Math.min(255, ratio <= 1 ? value * ratio : value + (255 - value) * Math.min(1, ratio - 1)),
+        ));
+    };
+    const normalised = (red, green, blue) => {
+        const max = Math.max(red, green, blue) || 1;
+        return [red * 255 / max, green * 255 / max, blue * 255 / max];
+    };
+    const REGION_DIR = Object.fromEntries(
+        Object.entries(REGION_REF).map(([name, reference]) => [name, normalised(...reference)]),
+    );
+    const nearestRegion = (red, green, blue, lowDown) => {
+        if (lum(red, green, blue) < 40 || (red > 100 && red < 165 && green > 35 && green < 95 && blue < 65)) return '';
+        const direction = normalised(red, green, blue);
+        let best = '';
+        let bestDistance = 45;
+        Object.entries(REGION_DIR).forEach(([name, reference]) => {
+            if (name === 'shoes' && !lowDown) return;
+            const distance = Math.hypot(
+                direction[0] - reference[0],
+                direction[1] - reference[1],
+                direction[2] - reference[2],
+            );
+            if (distance < bestDistance) {
+                best = name;
+                bestDistance = distance;
+            }
+        });
+        return best;
+    };
+    const isBuckle = (pixels, width, x, y) => {
+        const brownAt = (pixelX) => {
+            if (pixelX < 0 || pixelX >= width) return false;
+            const index = (y * width + pixelX) * 4;
+            return pixels[index + 3] > 0 && pixels[index] > 100 && pixels[index] < 165
+                && pixels[index + 1] > 35 && pixels[index + 1] < 95 && pixels[index + 2] < 65;
+        };
+        let left = false;
+        let right = false;
+        for (let offset = 1; offset <= 28; offset += 1) {
+            left = left || brownAt(x - offset);
+            right = right || brownAt(x + offset);
+        }
+        return left && right;
+    };
+
+    const tintHat = (hatImage, color) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = hatImage.width;
+        canvas.height = hatImage.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(hatImage, 0, 0);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+        const target = hexToRgb(color);
+        for (let index = 0; index < pixels.length; index += 4) {
+            if (pixels[index + 3] === 0 || lum(pixels[index], pixels[index + 1], pixels[index + 2]) < 40) continue;
+            const colorized = tint(target, [104, 159, 56], pixels[index], pixels[index + 1], pixels[index + 2]);
+            [pixels[index], pixels[index + 1], pixels[index + 2]] = colorized;
+        }
+        context.putImageData(imageData, 0, 0);
+        return canvas;
+    };
+
+    const buildCustomSprite = (image, hatImage, settings) => {
         if (!image?.complete || !image.naturalWidth) return image;
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
         const source = document.createElement('canvas');
-        source.width = image.naturalWidth;
-        source.height = image.naturalHeight;
+        source.width = width;
+        source.height = height;
         const sourceContext = source.getContext('2d', { willReadFrequently: true });
         sourceContext.drawImage(image, 0, 0);
-        const frame = sourceContext.getImageData(0, 0, source.width, source.height);
-        const pixels = frame.data;
-        const targets = {
-            hair: settings.hairColor,
-            skin: settings.skin,
-            shirt: settings.shirt,
-            pants: settings.pants,
-            shoes: settings.shoes,
-        };
-        const references = {
-            hair: [255, 235, 59],
-            skin: [255, 236, 179],
-            shirt: [139, 195, 74],
-            pants: [2, 136, 209],
-            shoes: [244, 67, 54],
-        };
-        const targetRgb = (value) => [1, 3, 5].map((index) => parseInt(value.slice(index, index + 2), 16));
-        const luminance = (r, g, b) => .299 * r + .587 * g + .114 * b;
-        const regionOf = (r, g, b) => {
-            if (r > 235 && g > 170 && b < 135) return 'hair';
-            if (r > 235 && g > 195 && g < 246 && b >= 140 && b < 200) return 'skin';
-            if (g > r + 25 && g > b + 40 && r < 170) return 'shirt';
-            if (b > r + 100 && b > g + 30) return 'pants';
-            if (r > 150 && g < 100 && b < 100) return 'shoes';
-            return null;
-        };
-        const topY = (() => {
-            for (let y = 0; y < source.height; y += 1) {
-                for (let x = 0; x < source.width; x += 1) {
-                    if (pixels[(y * source.width + x) * 4 + 3]) return y;
-                }
-            }
-            return 0;
-        })();
-        const hairCutoff = topY + source.height * .17;
-
-        for (let y = 0; y < source.height; y += 1) {
-            for (let x = 0; x < source.width; x += 1) {
-                const index = (y * source.width + x) * 4;
+        const imageData = sourceContext.getImageData(0, 0, width, height);
+        const pixels = imageData.data;
+        let topY = height;
+        let shirtTop = height;
+        let pantsTop = height;
+        for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+                const index = (y * width + x) * 4;
                 if (!pixels[index + 3]) continue;
+                topY = Math.min(topY, y);
                 const region = regionOf(pixels[index], pixels[index + 1], pixels[index + 2]);
-                if (!region || (region === 'hair' && settings.hair === 'short' && y > hairCutoff)) continue;
-                const target = targetRgb(targets[region]);
-                const reference = references[region];
-                const sourceLuminance = luminance(pixels[index], pixels[index + 1], pixels[index + 2]);
-                const referenceLuminance = luminance(...reference);
-                const ratio = sourceLuminance / referenceLuminance;
-                for (let channel = 0; channel < 3; channel += 1) {
-                    const value = ratio <= 1
-                        ? target[channel] * ratio
-                        : target[channel] + (255 - target[channel]) * Math.min(1, ratio - 1);
-                    pixels[index + channel] = Math.max(0, Math.min(255, value));
-                }
+                if (region === 'shirt') shirtTop = Math.min(shirtTop, y);
+                if (region === 'pants') pantsTop = Math.min(pantsTop, y);
             }
         }
-        sourceContext.putImageData(frame, 0, 0);
+        const lefts = [];
+        const rights = [];
+        for (let y = Math.round(shirtTop + (pantsTop - shirtTop) * 0.4); y < pantsTop; y += 1) {
+            let left = -1;
+            let right = -1;
+            for (let x = 0; x < width; x += 1) {
+                const index = (y * width + x) * 4;
+                if (pixels[index + 3] > 0 && regionOf(pixels[index], pixels[index + 1], pixels[index + 2]) === 'shirt') {
+                    if (left < 0) left = x;
+                    right = x;
+                }
+            }
+            if (left >= 0) {
+                lefts.push(left);
+                rights.push(right);
+            }
+        }
+        const median = (values, fallback) => values.length
+            ? values.sort((first, second) => first - second)[values.length >> 1]
+            : fallback;
+        const torsoLeft = median(lefts, 0);
+        const torsoRight = median(rights, width - 1);
+        const hairLimit = topY + height * 0.45;
+        const hairCutoff = topY + height * SHORT_HAIR_CUT;
+        for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+                const index = (y * width + x) * 4;
+                if (!pixels[index + 3]) continue;
+                let region = regionOf(pixels[index], pixels[index + 1], pixels[index + 2]);
+                if (!region && Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) > 200) {
+                    pixels[index + 3] = 0;
+                    continue;
+                }
+                region = region || nearestRegion(pixels[index], pixels[index + 1], pixels[index + 2], y > height * 0.8);
+                if (!region) {
+                    if (lum(pixels[index], pixels[index + 1], pixels[index + 2]) > 150) pixels[index + 3] = 0;
+                    continue;
+                }
+                if (region === 'hair' && y > hairLimit && isBuckle(pixels, width, x, y)) continue;
+                if (region === 'hair' && settings.hair === 'short' && y > hairCutoff) {
+                    pixels[index + 3] = 0;
+                    continue;
+                }
+                const target = hexToRgb(settings[region === 'hair' ? 'hairColor' : region]);
+                const colorized = tint(target, REGION_REF[region], pixels[index], pixels[index + 1], pixels[index + 2]);
+                [pixels[index], pixels[index + 1], pixels[index + 2]] = colorized;
+            }
+        }
+        for (let index = 0; index < pixels.length; index += 4) {
+            pixels[index + 3] = pixels[index + 3] < 128 ? 0 : 255;
+        }
 
-        const widen = Number(settings.shoulders) * 3;
-        const result = document.createElement('canvas');
-        result.width = source.width + widen * 2;
-        result.height = source.height;
-        const context = result.getContext('2d');
-        context.imageSmoothingEnabled = false;
-        context.drawImage(source, widen, 0);
-        if (widen) {
-            context.drawImage(source, 0, Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37),
-                0, Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37));
-            context.drawImage(source, Math.floor(source.width * .72), Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37),
-                result.width - Math.floor(source.width * .28), Math.floor(source.height * .26), Math.floor(source.width * .28), Math.floor(source.height * .37));
-        }
-        if (settings.hat && hatImage?.complete && hatImage.naturalWidth) {
-            const hat = document.createElement('canvas');
-            hat.width = hatImage.naturalWidth;
-            hat.height = hatImage.naturalHeight;
-            const hatContext = hat.getContext('2d', { willReadFrequently: true });
-            hatContext.drawImage(hatImage, 0, 0);
-            const hatPixels = hatContext.getImageData(0, 0, hat.width, hat.height);
-            const target = targetRgb(settings.hatColor);
-            for (let index = 0; index < hatPixels.data.length; index += 4) {
-                const data = hatPixels.data;
-                if (!data[index + 3] || luminance(data[index], data[index + 1], data[index + 2]) < 40) continue;
-                const ratio = luminance(data[index], data[index + 1], data[index + 2]) / luminance(104, 159, 56);
-                for (let channel = 0; channel < 3; channel += 1) {
-                    data[index + channel] = Math.max(0, Math.min(255, target[channel] * ratio));
+        const labels = new Int32Array(width * height);
+        let bestLabel = 0;
+        let bestSize = 0;
+        let nextLabel = 0;
+        for (let start = 0; start < width * height; start += 1) {
+            if (pixels[start * 4 + 3] === 0 || labels[start]) continue;
+            nextLabel += 1;
+            const stack = [start];
+            labels[start] = nextLabel;
+            let size = 0;
+            while (stack.length) {
+                const point = stack.pop();
+                size += 1;
+                const x = point % width;
+                const y = (point - x) / width;
+                for (let dy = -1; dy <= 1; dy += 1) {
+                    for (let dx = -1; dx <= 1; dx += 1) {
+                        const nextX = x + dx;
+                        const nextY = y + dy;
+                        if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+                        const next = nextY * width + nextX;
+                        if (pixels[next * 4 + 3] !== 0 && !labels[next]) {
+                            labels[next] = nextLabel;
+                            stack.push(next);
+                        }
+                    }
                 }
             }
-            hatContext.putImageData(hatPixels, 0, 0);
-            const hatTop = Math.max(0, Math.round(topY - hat.height + 10));
-            context.drawImage(hat, Math.round(result.width / 2 - hat.width / 2), hatTop);
+            if (size > bestSize) {
+                bestSize = size;
+                bestLabel = nextLabel;
+            }
+        }
+        for (let point = 0; point < width * height; point += 1) {
+            if (pixels[point * 4 + 3] !== 0 && labels[point] !== bestLabel) pixels[point * 4 + 3] = 0;
+        }
+
+        const extra = Math.round(Number(settings.shoulders) * PIXEL);
+        const outputWidth = width + extra * 2;
+        const output = new ImageData(outputWidth, height);
+        const outputPixels = output.data;
+        for (let y = 0; y < height; y += 1) {
+            let left = width;
+            let right = -1;
+            for (let x = 0; x < width; x += 1) {
+                if (pixels[(y * width + x) * 4 + 3] > 0) {
+                    left = Math.min(left, x);
+                    right = Math.max(right, x);
+                }
+            }
+            if (right < 0) continue;
+            if (!(extra > 0 && y >= shirtTop && y < pantsTop)) {
+                for (let x = left; x <= right; x += 1) {
+                    const sourceIndex = (y * width + x) * 4;
+                    const outputIndex = (y * outputWidth + x + extra) * 4;
+                    outputPixels.set(pixels.subarray(sourceIndex, sourceIndex + 4), outputIndex);
+                }
+                continue;
+            }
+            const put = (sourceX, targetX) => {
+                const sourceIndex = (y * width + sourceX) * 4;
+                const outputIndex = (y * outputWidth + targetX + extra) * 4;
+                outputPixels.set(pixels.subarray(sourceIndex, sourceIndex + 4), outputIndex);
+            };
+            for (let x = left; x < torsoLeft; x += 1) put(x, x - extra);
+            for (let x = torsoLeft; x <= torsoRight; x += 1) put(x, x);
+            for (let x = torsoRight + 1; x <= right; x += 1) put(x, x + extra);
+            if (torsoLeft > left) for (let x = torsoLeft - extra; x < torsoLeft; x += 1) put(torsoLeft - 1, x);
+            if (torsoRight < right) for (let x = torsoRight + 1; x < torsoRight + 1 + extra; x += 1) put(torsoRight + 1, x);
+        }
+
+        let headMin = outputWidth;
+        let headMax = -1;
+        for (let y = topY + 12; y < Math.min(height, topY + height * 0.12); y += 1) {
+            for (let x = 0; x < outputWidth; x += 1) {
+                if (outputPixels[(y * outputWidth + x) * 4 + 3] > 0) {
+                    headMin = Math.min(headMin, x);
+                    headMax = Math.max(headMax, x);
+                }
+            }
+        }
+        const headCenter = headMax >= 0 ? (headMin + headMax) / 2 : outputWidth / 2;
+        const hasHat = settings.hat && hatImage?.complete && hatImage.naturalWidth;
+        const hatExtra = hasHat ? Math.max(0, hatImage.height - HAT_OVERLAP - topY) : 0;
+        const result = document.createElement('canvas');
+        result.width = outputWidth;
+        result.height = height + hatExtra;
+        const resultContext = result.getContext('2d');
+        resultContext.putImageData(output, 0, hatExtra);
+        if (hasHat) {
+            resultContext.drawImage(
+                tintHat(hatImage, settings.hatColor),
+                Math.round(headCenter - hatImage.width / 2),
+                hatExtra + topY + HAT_OVERLAP - hatImage.height,
+            );
         }
         return result;
     };
@@ -249,7 +419,7 @@
         const settings = { ...customDefaults, ...(person.custom_character || {}) };
         const key = JSON.stringify([person.id, walking, settings]);
         if (!customSpriteCache.has(key)) {
-            customSpriteCache.set(key, tintSprite(
+            customSpriteCache.set(key, buildCustomSprite(
                 walking ? pictures.eveWalk : pictures.eve,
                 settings,
                 walking ? pictures.hatWalk : pictures.hatStand,
@@ -261,21 +431,21 @@
     const drawCustomPreview = () => {
         if (!customPreview || !pictures.eve?.complete || !pictures.eve.naturalWidth) return;
         const settings = readCustomCharacter();
-        const standing = tintSprite(pictures.eve, settings, pictures.hatStand);
-        const walking = tintSprite(pictures.eveWalk, settings, pictures.hatWalk);
+        const standing = buildCustomSprite(pictures.eve, pictures.hatStand, settings);
+        const walking = buildCustomSprite(pictures.eveWalk, pictures.hatWalk, settings);
         const context = customPreview.getContext('2d');
         context.clearRect(0, 0, customPreview.width, customPreview.height);
         context.imageSmoothingEnabled = false;
         [standing, walking].forEach((sprite, index) => {
             if (!sprite?.width || !sprite?.height) return;
-            const scale = Math.min(150 / sprite.height, 170 / sprite.width);
+            const scale = Math.min(124 / sprite.height, 170 / sprite.width);
             const width = sprite.width * scale;
             const height = sprite.height * scale;
-            context.drawImage(sprite, index * 180 + (180 - width) / 2, 170 - height, width, height);
+            context.drawImage(sprite, index * 180 + (180 - width) / 2, 148 - height, width, height);
             context.fillStyle = '#0b3d2e';
             context.textAlign = 'center';
             context.font = '12px Comfortaa, Arial, sans-serif';
-            context.fillText(index ? 'Walking' : 'Standing', index * 180 + 90, 177);
+            context.fillText(index ? 'Walking' : 'Standing', index * 180 + 90, 172);
         });
     };
 
@@ -395,18 +565,23 @@
             return;
         }
         const old = remotePlayers.get(presence.id);
-        const x = Number(presence.x);
+        const targetX = Number(presence.x);
+        const x = old ? old.x : targetX;
         remotePlayers.set(presence.id, {
             ...old,
             ...presence,
             x,
-            walking: Boolean(old && Math.abs(old.x - x) > 0.5),
+            targetX,
+            walking: Boolean(old && Math.abs((old.targetX ?? old.x) - targetX) > 0.5),
             lastMovedAt: performance.now(),
         });
     };
 
     const applySnapshot = (data) => {
         if (data.player) setPlayer(data.player);
+        if (Object.prototype.hasOwnProperty.call(data, 'crown_player_id')) {
+            crownPlayerId = data.crown_player_id;
+        }
         for (const online of data.online_players || []) updatePresence(online);
         const activeIds = new Set((data.online_players || []).map((online) => online.id));
         if (player) activeIds.add(player.id);
@@ -451,12 +626,21 @@
                 applySnapshot(data);
             } else if (data.type === 'presence_joined' || data.type === 'player_moved') {
                 updatePresence(data.player);
+                if (Object.prototype.hasOwnProperty.call(data, 'crown_player_id')) {
+                    crownPlayerId = data.crown_player_id;
+                }
             } else if (data.type === 'presence_left') {
                 remotePlayers.delete(data.player_id);
+                if (Object.prototype.hasOwnProperty.call(data, 'crown_player_id')) {
+                    crownPlayerId = data.crown_player_id;
+                }
             } else if (data.type === 'player_changed') {
                 setPlayer(data.player);
                 const remote = remotePlayers.get(data.player.id);
                 if (remote) remote.donated_cans = data.player.donated_cans;
+                if (Object.prototype.hasOwnProperty.call(data, 'crown_player_id')) {
+                    crownPlayerId = data.crown_player_id;
+                }
             } else if (data.type === 'action_result') {
                 actionPending = false;
                 actionButton.disabled = false;
@@ -476,6 +660,12 @@
             }
         });
         socket.addEventListener('close', (event) => {
+            if (event.code === 4409) {
+                player = null;
+                showAuth('This account was signed in elsewhere. Sign in again to take over.');
+                setStatus('');
+                return;
+            }
             if (event.code === 4401) {
                 player = null;
                 showAuth('Please sign in again to continue.');
@@ -550,18 +740,149 @@
         button.addEventListener('lostpointercapture', stop);
     });
 
-    const drawBuilding = (image, worldX, label, cameraX, night) => {
+    const prepareWorldAssets = () => {
+        const background = pictures.background;
+        if (roadMap || !background.complete || !background.naturalWidth) return;
+        const width = background.naturalWidth;
+        const height = background.naturalHeight;
+        const source = document.createElement('canvas');
+        source.width = width;
+        source.height = height;
+        const sourceContext = source.getContext('2d', { willReadFrequently: true });
+        sourceContext.drawImage(background, 0, 0);
+        const pixels = sourceContext.getImageData(0, 0, width, height).data;
+        const nightPixels = pixels.slice();
+        const tops = new Array(width).fill(436);
+        const bottoms = new Array(width).fill(472);
+        for (let x = 0; x < width; x += 1) {
+            let top = -1;
+            let bottom = -1;
+            for (let y = 250; y < height; y += 1) {
+                const index = (y * width + x) * 4;
+                const red = pixels[index];
+                const green = pixels[index + 1];
+                const blue = pixels[index + 2];
+                const sky = blue > 200 && red < 140;
+                const grass = green > red + 30 && green > blue + 30;
+                if (top < 0 && !sky && !grass) {
+                    top = y;
+                } else if (top >= 0 && grass) {
+                    bottom = y;
+                    break;
+                }
+            }
+            if (top >= 0 && bottom > top) {
+                tops[x] = top + ROAD_TOP_MARGIN;
+                bottoms[x] = bottom - ROAD_BOTTOM_MARGIN;
+            }
+        }
+        for (let y = 0; y < Math.min(height, 420); y += 1) {
+            for (let x = 0; x < width; x += 1) {
+                const index = (y * width + x) * 4;
+                if (nightPixels[index + 2] - nightPixels[index] > 70 && nightPixels[index + 2] > 100) {
+                    nightPixels[index] = 0;
+                    nightPixels[index + 1] = 0;
+                    nightPixels[index + 2] = 0;
+                }
+            }
+        }
+        const nightCanvas = document.createElement('canvas');
+        nightCanvas.width = width;
+        nightCanvas.height = height;
+        nightCanvas.getContext('2d').putImageData(new ImageData(nightPixels, width, height), 0, 0);
+        roadMap = { tops, bottoms };
+        nightBackground = nightCanvas;
+    };
+
+    const backgroundColumn = (worldX) => {
+        const width = pictures.background.naturalWidth;
+        const tile = Math.floor(worldX / width);
+        let column = Math.floor(worldX - tile * width);
+        if (Math.abs(tile) % 2 === 1) column = width - 1 - column;
+        return Math.max(0, Math.min(width - 1, column));
+    };
+
+    const roadFootY = (playerWorldX) => {
+        if (!roadMap) return 456;
+        let top = -Infinity;
+        let bottom = Infinity;
+        const worldX = canvas.width / 2 + playerWorldX;
+        for (let offset = -14; offset <= 14; offset += 4) {
+            const column = backgroundColumn(worldX + offset);
+            top = Math.max(top, roadMap.tops[column]);
+            bottom = Math.min(bottom, roadMap.bottoms[column]);
+        }
+        return (top + bottom) / 2;
+    };
+
+    const seededRandom = (seed) => {
+        const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+        return value - Math.floor(value);
+    };
+    const stars = Array.from({ length: 70 }, (_, index) => ({
+        x: Math.floor(seededRandom(index + 1) * 940) + 8,
+        y: Math.floor(seededRandom(index + 101) * 330) + 6,
+        size: seededRandom(index + 201) < 0.25 ? 4 : 2,
+        phase: seededRandom(index + 301) * 6.28,
+    }));
+
+    const drawClouds = (cameraX) => {
+        const cloud = pictures.cloud;
+        if (!cloud.complete || !cloud.naturalWidth) return;
+        const cycle = canvas.width + cloud.naturalWidth;
+        const drift = (performance.now() / 1000 * 18) % cycle;
+        for (let index = 0; index < 5; index += 1) {
+            const scale = 0.55 + seededRandom(index + 411) * 0.6;
+            const width = cloud.naturalWidth * scale;
+            const height = cloud.naturalHeight * scale;
+            const base = index * (canvas.width / 5) + seededRandom(index + 421) * 120;
+            const x = ((base - cameraX * 0.25 - drift) % cycle + cycle) % cycle - cloud.naturalWidth;
+            const y = 10 + seededRandom(index + 431) * 100;
+            ctx.drawImage(cloud, x, y, width, height);
+        }
+    };
+
+    const drawHouses = (cameraX) => {
+        const spacing = 2700;
+        const first = Math.floor((cameraX - canvas.width) / spacing) - 1;
+        const last = Math.ceil((cameraX + canvas.width) / spacing) + 1;
+        const landmarks = [FEED_X, STORE_X, TRADING_X, BINGO_X, 0];
+        for (let segment = first; segment <= last; segment += 1) {
+            const worldX = segment * spacing + (seededRandom(segment + 511) - 0.5) * 800;
+            if (landmarks.some((landmark) => Math.abs(worldX - landmark) < 520)) continue;
+            const house = pictures.houses[Math.floor(seededRandom(segment + 521) * pictures.houses.length)];
+            if (!house.complete || !house.naturalWidth) continue;
+            const width = house.naturalWidth * HOUSE_SCALE;
+            const height = house.naturalHeight * HOUSE_SCALE;
+            const x = canvas.width / 2 + worldX - cameraX;
+            if (x + width / 2 < 0 || x - width / 2 > canvas.width) continue;
+            ctx.drawImage(house, x - width / 2, 412 - height, width, height);
+        }
+    };
+
+    const drawTrees = (cameraX) => {
+        const spacing = 820;
+        const first = Math.floor((cameraX - canvas.width) / spacing) - 1;
+        const last = Math.ceil((cameraX + canvas.width) / spacing) + 1;
+        for (let segment = first; segment <= last; segment += 1) {
+            const worldX = segment * spacing + (seededRandom(segment + 611) - 0.5) * 520;
+            const tree = pictures.trees[Math.floor(seededRandom(segment + 621) * pictures.trees.length)];
+            if (!tree.complete || !tree.naturalWidth) continue;
+            const width = TREE_HEIGHT * tree.naturalWidth / tree.naturalHeight;
+            const x = canvas.width / 2 + worldX - cameraX;
+            if (x + width / 2 < 0 || x - width / 2 > canvas.width) continue;
+            const base = 536 + seededRandom(segment + 631) * 12;
+            ctx.drawImage(tree, x - width / 2, base - TREE_HEIGHT, width, TREE_HEIGHT);
+        }
+    };
+
+    const drawBuilding = (image, worldX, scale, cameraX) => {
         if (!image.complete || !image.naturalWidth) return;
-        const scale = Math.min(1, 150 / image.naturalWidth);
         const width = image.naturalWidth * scale;
         const height = image.naturalHeight * scale;
-        const x = WORLD_WIDTH / 2 + worldX - cameraX - width / 2;
-        const y = 340 - height;
-        ctx.drawImage(image, x, y, width, height);
-        ctx.fillStyle = night ? '#fff' : '#173b2c';
-        ctx.font = 'bold 16px Comfortaa, Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(label, x + width / 2, y - 8);
+        const x = canvas.width / 2 + worldX - cameraX - width / 2;
+        if (x > canvas.width || x + width < 0) return;
+        ctx.drawImage(image, Math.round(x), Math.round(412 - height), Math.round(width), Math.round(height));
     };
 
     const drawPlayer = (person, cameraX, isLocal, crowned) => {
@@ -573,7 +894,7 @@
         const imageHeight = image.naturalHeight || image.height;
         const h = imageWidth && imageHeight ? 90 : 70;
         const w = imageWidth && imageHeight ? h * imageWidth / imageHeight : 48;
-        const y = 420;
+        const y = roadFootY(person.x);
         if (imageWidth && imageHeight) {
             ctx.drawImage(image, x - w / 2, y - h, w, h);
         } else {
@@ -602,62 +923,66 @@
     const drawWorld = () => {
         const cameraX = localX;
         const isNight = phase === 'night';
+        ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const sky = ctx.createLinearGradient(0, 0, 0, 330);
-        sky.addColorStop(0, isNight ? '#102244' : '#56c8f2');
-        sky.addColorStop(1, isNight ? '#29385b' : '#d8f3ff');
-        ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, canvas.width, 330);
-        ctx.fillStyle = isNight ? '#243b35' : '#75bb57';
-        ctx.fillRect(0, 330, canvas.width, 218);
-        if (isNight) {
-            ctx.fillStyle = 'rgba(7, 14, 39, .38)';
+        prepareWorldAssets();
+        const background = isNight && nightBackground ? nightBackground : pictures.background;
+        if (pictures.background.complete && pictures.background.naturalWidth) {
+            const tileWidth = pictures.background.naturalWidth;
+            const firstTile = Math.floor(cameraX / tileWidth);
+            for (let tile = firstTile; tile * tileWidth - cameraX < canvas.width; tile += 1) {
+                const x = Math.round(tile * tileWidth - cameraX);
+                const mirrored = Math.abs(tile) % 2 === 1;
+                ctx.save();
+                if (mirrored) {
+                    ctx.translate(x + tileWidth, 0);
+                    ctx.scale(-1, 1);
+                } else {
+                    ctx.translate(x, 0);
+                }
+                ctx.drawImage(background, 0, 0);
+                ctx.restore();
+            }
+        } else {
+            ctx.fillStyle = '#56c8f2';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-
-        drawBuilding(pictures.sobeys, STORE_X, 'Sobeys', cameraX, isNight);
-        drawBuilding(pictures.feed, FEED_X, 'Feed Nova Scotia', cameraX, isNight);
-        drawBuilding(pictures.aj, BINGO_X, 'A.J. Smeltzer', cameraX, isNight);
-
-        ctx.fillStyle = '#4b4d51';
-        ctx.fillRect(0, 340, canvas.width, 140);
-        ctx.fillStyle = '#f6d35c';
-        for (let x = -((cameraX % 80) + 80) % 80; x < canvas.width; x += 80) {
-            ctx.fillRect(x, 408, 42, 5);
+        drawClouds(cameraX);
+        if (isNight) {
+            const time = performance.now() / 1000;
+            stars.forEach((star) => {
+                ctx.globalAlpha = 0.65 + 0.35 * Math.sin(time * 2 + star.phase);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+            ctx.globalAlpha = 1;
+            if (pictures.moon.complete && pictures.moon.naturalWidth && pictures.sun.complete && pictures.sun.naturalWidth) {
+                const size = Math.max(pictures.sun.naturalWidth, pictures.sun.naturalHeight);
+                const scale = size / Math.max(pictures.moon.naturalWidth, pictures.moon.naturalHeight);
+                const width = Math.round(pictures.moon.naturalWidth * scale);
+                const height = Math.round(pictures.moon.naturalHeight * scale);
+                ctx.drawImage(
+                    pictures.moon,
+                    Math.round(800 + (pictures.sun.naturalWidth - width) / 2),
+                    Math.round(34 + (pictures.sun.naturalHeight - height) / 2),
+                    width,
+                    height,
+                );
+            }
+        } else if (pictures.sun.complete && pictures.sun.naturalWidth) {
+            ctx.drawImage(pictures.sun, 800, 34);
         }
 
-        pictures.houses.forEach((house, index) => {
-            if (!house.complete || !house.naturalWidth) return;
-            const worldX = -1200 + index * 190;
-            const x = canvas.width / 2 + worldX - cameraX;
-            if (x > -120 && x < canvas.width + 120) {
-                const h = 85;
-                const w = h * house.naturalWidth / house.naturalHeight;
-                ctx.drawImage(house, x - w / 2, 340 - h, w, h);
-            }
-        });
+        drawHouses(cameraX);
+        drawBuilding(pictures.sobeys, STORE_X, 0.85, cameraX);
+        drawBuilding(pictures.feed, FEED_X, 0.75, cameraX);
+        drawBuilding(pictures.trading, TRADING_X, 0.8, cameraX);
+        drawBuilding(pictures.aj, BINGO_X, 0.7, cameraX);
         const active = [...remotePlayers.values()].filter((item) => item.id !== player?.id);
         const local = { ...player, x: localX };
-        const crownTarget = [...active, local].sort((a, b) =>
-            (b.donated_cans || 0) - (a.donated_cans || 0) || String(a.name).localeCompare(String(b.name))
-        )[0];
-        active.forEach((person) => drawPlayer(person, cameraX, false, crownTarget?.id === person.id));
-        drawPlayer(local, cameraX, true, crownTarget?.id === player?.id);
-        pictures.trees.forEach((tree, index) => {
-            if (!tree.complete || !tree.naturalWidth) return;
-            const worldX = 800 + index * 260;
-            const x = canvas.width / 2 + worldX - cameraX;
-            if (x > -100 && x < canvas.width + 100) {
-                const h = 100;
-                const w = h * tree.naturalWidth / tree.naturalHeight;
-                ctx.drawImage(tree, x - w / 2, 295 - h, w, h);
-            }
-        });
-        if (!isNight && pictures.sun.complete && pictures.sun.naturalWidth) {
-            ctx.drawImage(pictures.sun, 800, 28, 72, 72);
-        } else if (isNight && pictures.moon.complete && pictures.moon.naturalWidth) {
-            ctx.drawImage(pictures.moon, 800, 28, 72, 72);
-        }
+        active.forEach((person) => drawPlayer(person, cameraX, false, crownPlayerId === person.id));
+        drawPlayer(local, cameraX, true, crownPlayerId === player?.id);
+        drawTrees(cameraX);
     };
 
     const renderBingo = () => {
@@ -790,7 +1115,7 @@
         previousFrame = now;
         if (player && socket?.readyState === WebSocket.OPEN) {
             const direction = Number(pressed.has('right')) - Number(pressed.has('left'));
-            if (direction) localX = Math.max(-2500, Math.min(2500, localX + direction * PLAYER_SPEED * dt));
+            if (direction) localX += direction * PLAYER_SPEED * dt;
             if (now - lastMoveSentAt >= 250) {
                 send({ type: 'move', x: localX });
                 lastMoveSentAt = now;
@@ -813,6 +1138,12 @@
             }
             updateActionButton();
         }
+        remotePlayers.forEach((remote) => {
+            const distance = remote.targetX - remote.x;
+            remote.x = Math.abs(distance) < 0.2
+                ? remote.targetX
+                : remote.x + distance * Math.min(1, dt * 12);
+        });
         drawWorld();
         animationId = requestAnimationFrame(frame);
     };

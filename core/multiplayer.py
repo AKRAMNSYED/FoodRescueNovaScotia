@@ -199,12 +199,56 @@ def get_world_snapshot(player_id, now=None):
     return {
         'player': _player_payload(MultiplayerPlayer.objects.get(pk=player_id)),
         'online_players': active_players,
+        'crown_player_id': _crown_player_id(active_players),
         'phase': timing['phase'],
         'phase_seconds_left': timing['phase_seconds_left'],
         'cycle_number': timing['cycle_number'],
         'round_number': round_no,
         'bingo': bingo,
     }
+
+
+def _crown_player_id(players):
+    if not players:
+        return None
+    leader = min(
+        players,
+        key=lambda item: (
+            -item['donated_cans'],
+            item['name'].casefold(),
+            item['id'],
+        ),
+    )
+    return leader['id']
+
+
+def get_online_crown_id(now=None):
+    now = now or timezone.now()
+    presences = (
+        MultiplayerPresence.objects
+        .filter(last_seen__gte=now - PRESENCE_TIMEOUT)
+        .select_related('player')
+        .order_by('-last_seen')
+    )
+    active_players = []
+    seen = set()
+    for presence in presences:
+        if presence.player_id in seen:
+            continue
+        seen.add(presence.player_id)
+        active_players.append({
+            'id': presence.player_id,
+            'name': presence.player.name,
+            'donated_cans': presence.player.donated_cans,
+        })
+    return _crown_player_id(active_players)
+
+
+def refresh_presence(connection_id, now=None):
+    now = now or timezone.now()
+    return MultiplayerPresence.objects.filter(
+        connection_id=connection_id,
+    ).update(last_seen=now) == 1
 
 
 def update_presence(connection_id, x, avatar, now=None):
@@ -219,7 +263,7 @@ def update_presence(connection_id, x, avatar, now=None):
     presence = MultiplayerPresence.objects.filter(connection_id=connection_id).first()
     if presence is None:
         return None
-    x = max(-2500.0, min(2500.0, float(x)))
+    x = float(x)
     elapsed = max(0.05, (now - presence.last_seen).total_seconds())
     if abs(x - presence.x) > max(45, elapsed * 400):
         return None

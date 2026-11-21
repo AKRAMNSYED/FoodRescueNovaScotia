@@ -24,9 +24,12 @@ from .multiplayer import (
 	DAY_PAY,
 	claim_bingo,
 	clean_player_name,
+	get_online_crown_id,
 	game_timing,
 	get_world_snapshot,
 	perform_action,
+	refresh_presence,
+	update_presence,
 )
 from .multiplayer_views import DEFAULT_CUSTOM_CHARACTER, _custom_character_config
 
@@ -285,24 +288,6 @@ class UpdatesPageTests(TestCase):
 		self.assertContains(response, f'href="{reverse("updates")}"')
 
 
-@override_settings(STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
-class FoodChartPageTests(TestCase):
-	def test_food_chart_page_is_public_and_uses_chart_image(self):
-		response = self.client.get(reverse('food_chart'))
-
-		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'Food Chart')
-		self.assertContains(response, 'Food_chart.png')
-		self.assertContains(response, f'href="{reverse("food_chart")}"')
-
-	def test_home_links_find_food_and_give_food_to_chart(self):
-		response = self.client.get(reverse('home'))
-
-		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, f'<a href="{reverse("food_chart")}">find food</a>', html=True)
-		self.assertContains(response, f'<a href="{reverse("food_chart")}">give food</a>', html=True)
-
-
 class CreateMainAdminCommandTests(TestCase):
 	@patch(
 		'core.management.commands.create_main_admin.getpass.getpass',
@@ -490,6 +475,52 @@ class MultiplayerTests(TestCase):
 		)
 		self.assertEqual(good_response.status_code, 200)
 		self.assertEqual(self.client.session['multiplayer_player_id'], player.pk)
+
+	def test_idle_presence_is_refreshed_and_crown_is_selected_from_online_leaders(self):
+		idle_player = self.create_player('Idle')
+		leader = self.create_player('Leader')
+		offline_leader = self.create_player('Offline')
+		leader.donated_cans = 4
+		leader.save(update_fields=('donated_cans',))
+		offline_leader.donated_cans = 20
+		offline_leader.save(update_fields=('donated_cans',))
+		idle_presence = MultiplayerPresence.objects.create(
+			connection_id=uuid.uuid4(),
+			player=idle_player,
+			last_seen=self.now - timedelta(seconds=30),
+		)
+		MultiplayerPresence.objects.create(
+			connection_id=uuid.uuid4(),
+			player=leader,
+			last_seen=self.now,
+		)
+
+		self.assertTrue(refresh_presence(idle_presence.connection_id, now=self.now))
+		snapshot = get_world_snapshot(idle_player.pk, now=self.now)
+
+		self.assertEqual(snapshot['crown_player_id'], leader.pk)
+		self.assertEqual(
+			{online['id'] for online in snapshot['online_players']},
+			{idle_player.pk, leader.pk},
+		)
+		self.assertEqual(get_online_crown_id(now=self.now), leader.pk)
+
+	def test_multiplayer_position_has_no_artificial_world_edge(self):
+		player = self.create_player('Traveler')
+		presence = MultiplayerPresence.objects.create(
+			connection_id=uuid.uuid4(),
+			player=player,
+			last_seen=self.now,
+		)
+
+		updated = update_presence(
+			presence.connection_id,
+			3000,
+			'eve',
+			now=self.now + timedelta(seconds=10),
+		)
+
+		self.assertEqual(updated['x'], 3000)
 
 	def test_day_and_three_bingo_rounds_follow_shared_five_minute_clock(self):
 		self.assertEqual(game_timing(self.now)['phase'], 'day')

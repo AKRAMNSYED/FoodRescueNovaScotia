@@ -3,14 +3,17 @@ import uuid
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from .models import MultiplayerPlayer, MultiplayerPresence
 from .multiplayer import (
     PRESENCE_TIMEOUT,
     claim_bingo,
+    get_online_crown_id,
     get_world_snapshot,
     perform_action,
+    refresh_presence,
     update_presence,
 )
 
@@ -34,7 +37,13 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
         self.avatar = player.avatar
         self.custom_character = player.custom_character
         self.connection_id = uuid.uuid4()
+        self.player_group = f'multiplayer-player-{self.player_id}'
+        await self.channel_layer.group_send(
+            self.player_group,
+            {'type': 'session.replaced'},
+        )
         await self.create_presence()
+        await self.channel_layer.group_add(self.player_group, self.channel_name)
         await self.channel_layer.group_add(WORLD_GROUP, self.channel_name)
         await self.accept()
         await self.send_json({
@@ -46,6 +55,7 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
             {
                 'type': 'presence.joined',
                 'player': await self.presence_payload(),
+                'crown_player_id': await self.get_online_crown(),
             },
         )
 
@@ -53,17 +63,26 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
         if not hasattr(self, 'connection_id'):
             return
         await self.delete_presence()
+        await self.channel_layer.group_discard(self.player_group, self.channel_name)
         await self.channel_layer.group_discard(WORLD_GROUP, self.channel_name)
         remaining = await self.latest_presence()
         if remaining:
             await self.channel_layer.group_send(
                 WORLD_GROUP,
-                {'type': 'presence.joined', 'player': remaining},
+                {
+                    'type': 'presence.joined',
+                    'player': remaining,
+                    'crown_player_id': await self.get_online_crown(),
+                },
             )
         else:
             await self.channel_layer.group_send(
                 WORLD_GROUP,
-                {'type': 'presence.left', 'player_id': self.player_id},
+                {
+                    'type': 'presence.left',
+                    'player_id': self.player_id,
+                    'crown_player_id': await self.get_online_crown(),
+                },
             )
 
     async def receive_json(self, content, **kwargs):
@@ -71,6 +90,9 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
             return
         message_type = content.get('type')
         if message_type == 'sync':
+            if not await self.refresh_player_presence():
+                await self.close(code=4409)
+                return
             await self.send_json({'type': 'snapshot', **await self.get_snapshot()})
         elif message_type == 'move':
             x = content.get('x')
@@ -103,7 +125,11 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
     async def broadcast_player_update(self, player):
         await self.channel_layer.group_send(
             WORLD_GROUP,
-            {'type': 'player.changed', 'player': player},
+            {
+                'type': 'player.changed',
+                'player': player,
+                'crown_player_id': await self.get_online_crown(),
+            },
         )
 
     async def snapshot(self, event):
@@ -111,18 +137,33 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
 
     async def presence_joined(self, event):
         if event['player']['id'] != self.player_id:
-            await self.send_json({'type': 'presence_joined', 'player': event['player']})
+            await self.send_json({
+                'type': 'presence_joined',
+                'player': event['player'],
+                'crown_player_id': event['crown_player_id'],
+            })
 
     async def presence_left(self, event):
         if event['player_id'] != self.player_id:
-            await self.send_json({'type': 'presence_left', 'player_id': event['player_id']})
+            await self.send_json({
+                'type': 'presence_left',
+                'player_id': event['player_id'],
+                'crown_player_id': event['crown_player_id'],
+            })
 
     async def player_moved(self, event):
         if event['player']['id'] != self.player_id:
             await self.send_json({'type': 'player_moved', 'player': event['player']})
 
     async def player_changed(self, event):
-        await self.send_json({'type': 'player_changed', 'player': event['player']})
+        await self.send_json({
+            'type': 'player_changed',
+            'player': event['player'],
+            'crown_player_id': event['crown_player_id'],
+        })
+
+    async def session_replaced(self, event):
+        await self.close(code=4409)
 
     async def bingo_winner(self, event):
         await self.send_json({
@@ -140,14 +181,17 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def create_presence(self):
         now = timezone.now()
-        MultiplayerPresence.objects.filter(
-            last_seen__lt=now - PRESENCE_TIMEOUT,
-        ).delete()
-        MultiplayerPresence.objects.create(
-            connection_id=self.connection_id,
-            player_id=self.player_id,
-            avatar=self.avatar,
-        )
+        with transaction.atomic():
+            MultiplayerPlayer.objects.select_for_update().get(pk=self.player_id)
+            MultiplayerPresence.objects.filter(
+                last_seen__lt=now - PRESENCE_TIMEOUT,
+            ).delete()
+            MultiplayerPresence.objects.filter(player_id=self.player_id).delete()
+            MultiplayerPresence.objects.create(
+                connection_id=self.connection_id,
+                player_id=self.player_id,
+                avatar=self.avatar,
+            )
 
     @database_sync_to_async
     def delete_presence(self):
@@ -193,6 +237,14 @@ class MultiplayerConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def get_snapshot(self):
         return get_world_snapshot(self.player_id)
+
+    @database_sync_to_async
+    def get_online_crown(self):
+        return get_online_crown_id()
+
+    @database_sync_to_async
+    def refresh_player_presence(self):
+        return refresh_presence(self.connection_id)
 
     @database_sync_to_async
     def update_player_position(self, x):
